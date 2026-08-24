@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Blueprint (light): drafting-table paper, navy ink, rust accent -->
+    <color name="brand_primary">#C4571F</color>
+    <color name="brand_on_primary">#FFFFFF</color>
+    <color name="brand_primary_container">#FFDBC2</color>
+    <color name="brand_on_primary_container">#3A1400</color>
+
+    <color name="brand_secondary">#3D5A99</color>
+    <color name="brand_on_secondary">#FFFFFF</color>
+
+    <!-- Surfaces -->
+    <color name="surface">#FFFFFF</color>
+    <color name="on_surface">#16233F</color>
+    <color name="surface_variant">#DCE4F5</color>
+    <color name="on_surface_variant">#44506E</color>
+    <color name="background">#EEF2FB</color>
+    <color name="on_background">#16233F</color>
+    <color name="outline">#B9C6E2</color>
+
+    <!-- Error -->
+    <color name="error">#A4152B</color>
+    <color name="on_error">#FFFFFF</color>
+    <color name="error_container">#FDECEE</color>
+    <color name="on_error_container">#7A0E20</color>
+
+    <!-- Custom "caution" role (OTG/hardware warning card) -->
+    <color name="warning_container">#FFF2E9</color>
+    <color name="on_warning_container">#8A3A10</color>
+</resources>
