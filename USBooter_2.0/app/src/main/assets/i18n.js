@@ -1339,6 +1339,43 @@
    * when the language is English.
    */
   var NATIVE_RULES = [
+    // ── Specific first: failure sentences after the "Error: " prefix ───────
+    [/^the drive is too small$/,
+      { it: "l'unità è troppo piccola", es: 'la unidad es demasiado pequeña', pt: 'a unidade é demasiado pequena', zh: '驱动器容量不足' }],
+    [/^the drive stopped answering reads$/,
+      { it: "l'unità ha smesso di rispondere alle letture", es: 'la unidad dejó de responder a las lecturas', pt: 'a unidade deixou de responder às leituras', zh: '驱动器停止响应读取' }],
+    [/^the requested layout does not fit on this drive$/,
+      { it: "il layout richiesto non entra in quest'unità", es: 'el diseño solicitado no cabe en esta unidad', pt: 'o esquema pedido não cabe nesta unidade', zh: '所请求的分区布局在此驱动器上放不下' }],
+    [/^not enough room for the Windows layout$/,
+      { it: 'spazio insufficiente per il layout di Windows', es: 'espacio insuficiente para el diseño de Windows', pt: 'espaço insuficiente para o esquema do Windows', zh: '空间不足以容纳 Windows 布局' }],
+    [/^a file in this image is too big for FAT32$/,
+      { it: "un file di questa immagine è troppo grande per FAT32", es: 'un archivo de esta imagen es demasiado grande para FAT32', pt: 'um ficheiro desta imagem é demasiado grande para FAT32', zh: '此镜像中有文件超出 FAT32 的大小上限' }],
+    [/^a Windows ISO cannot be raw-cloned$/,
+      { it: 'una ISO di Windows non può essere copiata in modo grezzo', es: 'una ISO de Windows no se puede clonar sin procesar', pt: 'uma ISO do Windows não pode ser clonada em bruto', zh: 'Windows ISO 无法进行原始克隆' }],
+    [/^this image is not raw-cloneable$/,
+      { it: 'questa immagine non è copiabile in modo grezzo', es: 'esta imagen no se puede clonar sin procesar', pt: 'esta imagem não pode ser clonada em bruto', zh: '此镜像不支持原始克隆' }],
+    [/^this image cannot boot on legacy BIOS$/,
+      { it: 'questa immagine non può avviarsi su BIOS legacy', es: 'esta imagen no puede arrancar en BIOS heredada', pt: 'esta imagem não pode arrancar em BIOS legado', zh: '此镜像无法在传统 BIOS 上启动' }],
+    [/^bundled bootloader assets are damaged$/,
+      { it: 'le risorse del bootloader incluse sono danneggiate', es: 'los recursos del gestor de arranque incluidos están dañados', pt: 'os recursos do gestor de arranque incluídos estão danificados', zh: '内置引导程序资源已损坏' }],
+    [/^the UEFI bootloader did not verify$/,
+      { it: 'il bootloader UEFI non ha superato la verifica', es: 'el gestor de arranque UEFI no pasó la verificación', pt: 'o gestor de arranque UEFI não passou a verificação', zh: 'UEFI 引导程序未通过校验' }],
+    [/^the required Windows files are missing or damaged$/,
+      { it: 'i file di Windows richiesti sono mancanti o danneggiati', es: 'faltan archivos de Windows necesarios o están dañados', pt: 'faltam ficheiros do Windows necessários ou estão danificados', zh: '必需的 Windows 文件缺失或损坏' }],
+    [/^the selected ISO can no longer be read$/,
+      { it: "l'ISO selezionata non è più leggibile", es: 'la ISO seleccionada ya no se puede leer', pt: 'a ISO selecionada já não pode ser lida', zh: '所选 ISO 已无法读取' }],
+    [/^verification failed$/,
+      { it: 'verifica non riuscita', es: 'la verificación falló', pt: 'a verificação falhou', zh: '校验失败' }],
+
+    // ── Filesystem structure names used by the repair findings ─────────────
+    [/^Partition (\d+): (?:boot sector|NTFS boot sector) is damaged$/,
+      { it: 'Partizione {1}: settore di avvio danneggiato', es: 'Partición {1}: sector de arranque dañado', pt: 'Partição {1}: setor de arranque danificado', zh: '分区 {1}：引导扇区已损坏' }],
+    [/^Partition (\d+): (?:FAT32 backup boot sector|NTFS boot-sector copy) is damaged$/,
+      { it: 'Partizione {1}: copia di riserva del settore di avvio danneggiata', es: 'Partición {1}: copia de reserva del sector de arranque dañada', pt: 'Partição {1}: cópia de reserva do setor de arranque danificada', zh: '分区 {1}：引导扇区备份副本已损坏' }],
+    [/^Partition (\d+): boot region is damaged$/,
+      { it: 'Partizione {1}: regione di avvio danneggiata', es: 'Partición {1}: región de arranque dañada', pt: 'Partição {1}: região de arranque danificada', zh: '分区 {1}：引导区域已损坏' }],
+    [/^Partition (\d+): exFAT backup boot region is damaged$/,
+      { it: 'Partizione {1}: regione di avvio exFAT di riserva danneggiata', es: 'Partición {1}: región de arranque exFAT de reserva dañada', pt: 'Partição {1}: região de arranque exFAT de reserva danificada', zh: '分区 {1}：exFAT 备份引导区域已损坏' }],
     // ── Progress: layout, formatting, writing ──────────────────────────────
     [/^Preparing the drive\.\.\.$/,
       { it: "Preparazione dell'unità...", es: 'Preparando la unidad...', pt: 'A preparar a unidade...', zh: '正在准备驱动器…' }],
