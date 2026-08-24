@@ -1,0 +1,2367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>USBooter</title>
+<style>
+  /* ── Reset & Base ── */
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    height:auto;
+    min-height:100%;
+    overflow-x:hidden;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  body{
+    font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    transition:background .4s, color .4s;
+    padding:0;
+    margin:0;
+    min-height:100vh;
+    min-height:100dvh;
+  }
+
+  /* ── Theme Variables ── */
+  body.light{
+    background:#eef2fb;
+    --app-bg:#eef2fb;
+    --card-bg:#ffffff;
+    --card-hover:#f5f8ff;
+    --text:#16233f;
+    --text-muted:#5f7099;
+    --text-light:#8b98b8;
+    --border:#d5dfef;
+    --border-dark:#16233f;
+    --accent:#c4571f;
+    --accent-hover:#a84a1a;
+    --accent-bg:#ffd9bd;
+    --danger:#a4152b;
+    --danger-hover:#8a1123;
+    --danger-bg:#fdecee;
+    --success:#2d7d46;
+    --seg-esp:#ffd9bd;
+    --seg-data:#d7e3fb;
+    --dot-bg:#3bad4a;
+    --alert-border:#a4152b;
+    --alert-bg:#fdecee;
+    --alert-text:#7a0e20;
+    --wipe-hint-bg:#f5f8ff;
+    --wipe-hint-border:#b9c6e2;
+    --modal-bg:#ffffff;
+    --modal-shadow:rgba(0,0,0,0.2);
+    --toast-bg:#16233f;
+    --toast-text:#eef2fb;
+    --step-dot-inactive:#d5dfef;
+    --step-dot-active:#c4571f;
+    --step-dot-done:#2d7d46;
+    --input-bg:#ffffff;
+    --input-border:#d5dfef;
+    --input-focus:#c4571f;
+    --partition-item-bg:#f5f8ff;
+    --toggle-bg:#ffffff;
+    --toggle-text:#16233f;
+    --toggle-active-bg:#16233f;
+    --toggle-active-text:#eef2fb;
+    --btn-ghost-border:#16233f;
+    --btn-ghost-text:#16233f;
+    --btn-ghost-hover-bg:#16233f;
+    --btn-ghost-hover-text:#eef2fb;
+    --bar-border:#d5dfef;
+    --bar-text:#5f7099;
+    --bar-text-bold:#16233f;
+    --status-dot:#3bad4a;
+    --wipe-input-bg:#ffffff;
+    --wipe-input-border:#d5dfef;
+    --wipe-input-text:#16233f;
+  }
+
+  body.dark{
+    background:#080c1f;
+    --app-bg:#080c1f;
+    --card-bg:#0d1430;
+    --card-hover:#141d40;
+    --text:#e0e6f0;
+    --text-muted:#b0bacd;
+    --text-light:#909bb0;
+    --border:#1a2340;
+    --border-dark:#e0e6f0;
+    --accent:#8b98b8;
+    --accent-hover:#adb9d8;
+    --accent-bg:#1e2a4a;
+    --danger:#ff5566;
+    --danger-hover:#ff3344;
+    --danger-bg:#300a0a;
+    --success:#44ff88;
+    --seg-esp:#3d4a6a;
+    --seg-data:#1e2a4a;
+    --dot-bg:#44ff88;
+    --alert-border:#ff5566;
+    --alert-bg:#300a0a;
+    --alert-text:#ffb0b0;
+    --wipe-hint-bg:#0d1430;
+    --wipe-hint-border:#1a2340;
+    --modal-bg:#0d1430;
+    --modal-shadow:rgba(0,0,0,0.6);
+    --toast-bg:#080c1f;
+    --toast-text:#e0e6f0;
+    --step-dot-inactive:#1a2340;
+    --step-dot-active:#e0e6f0;
+    --step-dot-done:#44ff88;
+    --input-bg:#0d1430;
+    --input-border:#1a2340;
+    --input-focus:#e0e6f0;
+    --partition-item-bg:#0d1430;
+    --toggle-bg:#080c1f;
+    --toggle-text:#e0e6f0;
+    --toggle-active-bg:#e0e6f0;
+    --toggle-active-text:#080c1f;
+    --btn-ghost-border:#e0e6f0;
+    --btn-ghost-text:#e0e6f0;
+    --btn-ghost-hover-bg:#e0e6f0;
+    --btn-ghost-hover-text:#080c1f;
+    --bar-border:#1a2340;
+    --bar-text:#9da6bc;
+    --bar-text-bold:#e0e6f0;
+    --status-dot:#44ff88;
+    --wipe-input-bg:#0d1430;
+    --wipe-input-border:#1a2340;
+    --wipe-input-text:#e0e6f0;
+  }
+
+  /* ── App Container ── */
+  .app{
+    width:100%;
+    max-width:500px;
+    height:auto;
+    min-height:100vh;
+    min-height:100dvh;
+    background:var(--app-bg);
+    overflow:visible;
+    box-shadow:0 0 80px rgba(0,0,0,0.06);
+    transition:background .4s;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    margin: 0 auto;
+  }
+  body.dark .app{box-shadow:0 0 80px rgba(0,0,0,0.25);}
+
+  /* ── Status Bar ── */
+  .bar{
+    display: none;
+  }
+  .bar .step-indicator{
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .bar .step-dot{
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:var(--step-dot-inactive);
+    transition:all .3s;
+  }
+  .bar .step-dot.active{
+    background:var(--step-dot-active);
+    width:18px;
+    border-radius:3px;
+  }
+  .bar .step-dot.done{
+    background:var(--step-dot-done);
+  }
+  .bar b{
+    color:var(--bar-text-bold);
+    font-family:monospace;
+    font-weight:600;
+    transition:color .4s;
+  }
+  .bar .status{
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .bar .dot{
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:var(--status-dot);
+    display:inline-block;
+    animation:pulse 1.5s ease-in-out infinite;
+  }
+  body.dark .bar .dot{box-shadow:0 0 12px rgba(75,201,91,0.3);}
+  @keyframes pulse{
+    0%,100%{opacity:1;}
+    50%{opacity:0.4;}
+  }
+
+  /* ── Body ── */
+  .body{
+    padding:20px 24px 24px;
+    padding-bottom:max(24px, env(safe-area-inset-bottom));
+    display:flex;
+    flex-direction:column;
+    flex:1 0 auto;
+    gap:16px;
+    overflow:visible;
+    transition:background .4s;
+    min-height:0;
+  }
+
+  /* ── Theme Toggle ── */
+  /* ── Top bar: language on the left, theme pill on the right ── */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+    flex-shrink:0;
+  }
+  .lang-select{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    flex:0 1 auto;
+    min-width:0;
+  }
+  .lang-select::after{
+    content:"";
+    position:absolute;
+    right:10px;
+    top:50%;
+    width:7px;
+    height:7px;
+    margin-top:-4px;
+    border-right:2px solid var(--text-muted);
+    border-bottom:2px solid var(--text-muted);
+    transform:rotate(45deg);
+    pointer-events:none;
+  }
+  .lang-select select{
+    -webkit-appearance:none;
+    appearance:none;
+    width:100%;
+    max-width:170px;
+    min-width:110px;
+    height:34px;
+    padding:0 28px 0 12px;
+    border-radius:17px;
+    border:1.5px solid var(--border);
+    background:var(--card-bg);
+    color:var(--text);
+    font-size:12px;
+    font-weight:600;
+    line-height:34px;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    overflow:hidden;
+    transition:background .4s, color .4s, border-color .4s;
+  }
+  .lang-select select:focus{outline:none; border-color:var(--accent);}
+  .lang-select select option{background:var(--card-bg); color:var(--text);}
+  body.dark .lang-select select option{background:#0b2a63; color:#eaf2ff;}
+
+  .theme-toggle{
+    display:flex;
+    gap:4px;
+    background:var(--card-bg);
+    border:1.5px solid var(--border);
+    border-radius:20px;
+    padding:3px;
+    transition:all .4s;
+    flex-shrink:0;
+  }
+  .theme-toggle button{
+    padding:6px 16px;
+    border:none;
+    border-radius:16px;
+    cursor:pointer;
+    font-weight:700;
+    font-size:11px;
+    transition:all .3s;
+    background:transparent;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  .theme-toggle button.active{
+    background:var(--accent);
+    color:#fff;
+  }
+  body.dark .theme-toggle button.active{color:#2a1000;}
+  .theme-toggle button:hover:not(.active){background:var(--card-hover);}
+
+
+  /* ── Label ── */
+  .label{
+    font-size:10px;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:.09em;
+    font-weight:700;
+    transition:color .4s;
+    flex-shrink:0;
+  }
+
+  /* ── Screens ── */
+  .screen-content{
+    display:none;
+    flex-direction:column;
+    gap:16px;
+    flex:1 0 auto;
+    overflow:visible;
+    animation:fadeSlide .3s ease;
+    padding-right:2px;
+    min-height:0;
+  }
+  .screen-content::-webkit-scrollbar{width:3px;}
+  .screen-content::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+  .screen-content.active{display:flex;}
+  @keyframes fadeSlide{
+    from{opacity:0; transform:translateX(16px);}
+    to{opacity:1; transform:translateX(0);}
+  }
+
+  /* ── Scrollable content wrapper ── */
+  .scroll-content{
+    flex:1 0 auto;
+    overflow:visible;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    min-height:0;
+    padding-right:2px;
+  }
+  .scroll-content::-webkit-scrollbar{width:3px;}
+  .scroll-content::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+
+  /* ── Drive Card ── */
+  .drivecard{
+    border:1.5px solid var(--border-dark);
+    background:var(--card-bg);
+    border-radius:12px;
+    padding:16px;
+    cursor:pointer;
+    transition:all .3s cubic-bezier(0.4, 0, 0.2, 1);
+    position:relative;
+    flex-shrink:0;
+    overflow: hidden;
+    max-height: 80px;
+  }
+  .drivecard:hover{
+    background:var(--card-hover);
+    transform:translateY(-2px);
+  }
+  .drivecard.selected{
+    border-color:var(--accent);
+    background:var(--card-hover);
+    max-height: 200px;
+  }
+  .drivecard .name{
+    font-weight:700;
+    font-size:15px;
+    color:var(--text);
+  }
+  .drivecard .meta{
+    font-family:monospace;
+    color:var(--text-muted);
+    font-size:11px;
+    margin-top:4px;
+  }
+  .drivecard .details{
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: none;
+    animation: fadeIn .3s ease;
+  }
+  .drivecard.selected .details{
+    display: block;
+  }
+  .drivecard .detail-row{
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .drivecard .detail-k{ color: var(--text-muted); }
+  .drivecard .detail-v{ color: var(--text); font-weight: 600; font-family: monospace; }
+  .drivecard .size-badge{
+    display:inline-block;
+    background:var(--border);
+    padding:2px 10px;
+    border-radius:12px;
+    font-size:10px;
+    font-weight:600;
+    margin-top:6px;
+    color:var(--text);
+    transition:all .4s;
+  }
+  .drivecard.selected .size-badge{
+    background:var(--accent-bg);
+    color:var(--text);
+  }
+  body.dark .drivecard.selected .size-badge{color:#2a1000;}
+  .drivecard .badge{
+    position:absolute;
+    top:12px; right:12px;
+    font-size:8px;
+    font-weight:700;
+    text-transform:uppercase;
+    background:var(--border-dark);
+    color:var(--app-bg);
+    padding:2px 10px;
+    border-radius:12px;
+    transition:all .4s;
+  }
+  .drivecard.selected .badge{background:var(--accent); color:#fff;}
+  body.dark .drivecard.selected .badge{color:#2a1000;}
+
+  /* ── Buttons ── */
+  .btnrow{
+    display:flex;
+    gap:10px;
+    flex-shrink:0;
+    padding-top:4px;
+    margin-top:auto;
+  }
+  .btn{
+    flex:1;
+    text-align:center;
+    padding:13px 16px;
+    font-size:13px;
+    font-weight:700;
+    border-radius:10px;
+    cursor:pointer;
+    transition:all .2s ease;
+    border:none;
+    font-family:inherit;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn.primary{
+    background:var(--accent);
+    color:#fff;
+    transition:background .3s, box-shadow .3s;
+  }
+  body.dark .btn.primary{color:#2a1000;}
+  .btn.primary:hover{
+    background:var(--accent-hover);
+    box-shadow:0 4px 16px rgba(196,87,31,0.25);
+  }
+  body.dark .btn.primary:hover{box-shadow:0 4px 20px rgba(255,154,92,0.3);}
+  .btn.ghost{
+    border:1.5px solid var(--btn-ghost-border);
+    color:var(--btn-ghost-text);
+    background:transparent;
+    transition:all .3s;
+  }
+  .btn.ghost:hover{
+    background:var(--btn-ghost-hover-bg);
+    color:var(--btn-ghost-hover-text);
+  }
+  .btn.danger{
+    background:var(--danger);
+    color:#fff;
+    transition:background .3s, box-shadow .3s;
+  }
+  body.dark .btn.danger{color:#3a0006;}
+  .btn.danger:hover{
+    background:var(--danger-hover);
+    box-shadow:0 4px 16px rgba(164,21,43,0.25);
+  }
+  body.dark .btn.danger:hover{box-shadow:0 4px 20px rgba(255,107,122,0.3);}
+  .btn:disabled{opacity:0.4; cursor:not-allowed; transform:none; box-shadow:none!important;}
+  .btn.back{
+    flex:0 0 auto;
+    padding:13px 20px;
+    background:transparent;
+    color:var(--text-muted);
+    border:1.5px solid var(--border);
+    transition:all .3s;
+  }
+  .btn.small{
+    padding: 8px 12px;
+    font-size: 11px;
+    border-radius: 8px;
+  }
+  .btn.ghost-danger{
+    border:1.5px solid var(--danger);
+    color:var(--danger);
+    background:transparent;
+  }
+  .btn.ghost-danger:hover{
+    background:var(--danger);
+    color:#fff;
+  }
+
+  /* ── Toggle Group ── */
+  .toggle-group{
+    display:flex;
+    border:1.5px solid var(--border-dark);
+    border-radius:24px;
+    overflow:hidden;
+    font-size:12px;
+    font-weight:700;
+    background:var(--toggle-bg);
+    transition:all .4s;
+    flex-shrink:0;
+  }
+  .toggle-group .toggle-opt{
+    flex:1;
+    text-align:center;
+    padding:9px 16px;
+    color:var(--toggle-text);
+    cursor:pointer;
+    transition:all .2s;
+    user-select:none;
+  }
+  .toggle-group .toggle-opt:hover{background:var(--card-hover);}
+  .toggle-group .toggle-opt.active{
+    background:var(--toggle-active-bg);
+    color:var(--toggle-active-text);
+  }
+  .toggle-opt.disabled{
+    opacity: 0.3;
+    cursor: not-allowed!important;
+    background: transparent!important;
+    color: var(--text-muted)!important;
+  }
+
+  /* ── Disk Map ── */
+  .diskmap{
+    border:1.5px solid var(--border-dark);
+    border-radius:10px;
+    padding:12px 14px;
+    background:var(--card-bg);
+    transition:all .4s;
+    flex-shrink:0;
+  }
+  .diskmap .ruler{
+    font-family:monospace;
+    font-size:8.5px;
+    color:var(--text-light);
+    display:flex;
+    justify-content:space-between;
+    margin-bottom:6px;
+    transition:color .4s;
+  }
+  .segbar{
+    height:42px;
+    display:flex;
+    border-radius:4px;
+    overflow:hidden;
+    border:1.5px solid var(--border-dark);
+    transition:border-color .4s;
+    position:relative;
+  }
+  .seg{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-size:9px;
+    font-weight:700;
+    border-right:1.5px dashed var(--border-dark);
+    transition:all .3s;
+    min-width:40px;
+    position:relative;
+  }
+  .seg:last-child{border-right:none;}
+  .seg.esp{
+    background:var(--seg-esp);
+    color:var(--text);
+    transition:flex .3s, background .4s, color .4s;
+  }
+  body.dark .seg.esp{color:#3a1400;}
+  .seg.data{
+    background:var(--seg-data);
+    color:var(--text);
+    flex:1;
+    transition:flex .3s, background .4s, color .4s;
+  }
+  .seg .seg-label{
+    font-size:9px;
+    font-weight:700;
+  }
+  .seg .seg-size{
+    font-size:7.5px;
+    font-weight:400;
+    opacity:.7;
+    margin-top:1px;
+  }
+
+  /* ── Row ── */
+  .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:13px;
+    padding:4px 0;
+  }
+  .row .k{
+    color:var(--text-muted);
+    font-weight:500;
+    transition:color .4s;
+  }
+  .row .v{
+    font-family:monospace;
+    font-weight:600;
+    color:var(--text);
+    transition:color .4s;
+  }
+  .row .v.accent{color:var(--accent);}
+  .row+.row{border-top:1px solid var(--border); padding-top:8px;}
+
+  /* ── Info Card ── */
+  .info-card{
+    border:1.5px solid var(--border);
+    background:var(--card-bg);
+    border-radius:10px;
+    padding:14px 16px;
+    transition:all .4s;
+    flex-shrink:0;
+  }
+
+  /* ── Write-mode cards ── */
+  .mode-list{display:flex; flex-direction:column; gap:8px;}
+  .mode-card{
+    border:1.5px solid var(--border);
+    background:var(--card-bg);
+    border-radius:10px;
+    padding:10px 12px;
+    cursor:pointer;
+    transition:border-color .25s, background .25s, opacity .25s;
+  }
+  .mode-card.selected{border-color:var(--accent);}
+  .mode-card.disabled{opacity:.45; pointer-events:none;}
+  .mode-head{display:flex; align-items:center; gap:8px;}
+  .mode-dot{
+    width:14px; height:14px; border-radius:50%;
+    border:2px solid var(--border);
+    flex-shrink:0; transition:all .25s;
+  }
+  .mode-card.selected .mode-dot{
+    border-color:var(--accent);
+    box-shadow:inset 0 0 0 3px var(--accent);
+  }
+  .mode-title{font-size:13px; font-weight:600; color:var(--text); flex:1; min-width:0;}
+  .mode-tag{
+    font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--text-muted); border:1px solid var(--border);
+    border-radius:999px; padding:2px 7px; white-space:nowrap;
+  }
+  .mode-card.selected .mode-tag{color:var(--accent); border-color:var(--accent);}
+  .mode-desc{font-size:12px; color:var(--text-muted); line-height:1.45; margin-top:5px; padding-left:22px;}
+  .mode-note{font-size:12px; color:var(--text-muted); margin-top:8px;}
+
+  /* ── Live I/O position ── */
+  .io-line{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11px; color:var(--text-muted);
+    margin-top:6px; word-break:break-word; line-height:1.5;
+  }
+  .io-line .bad{color:var(--danger); font-weight:700;}
+
+  /* ── Preflight results ── */
+  .check-row{display:flex; gap:8px; align-items:flex-start; font-size:12px; padding:5px 0;}
+  .check-row+.check-row{border-top:1px solid var(--border);}
+  .check-row .mark{flex-shrink:0; font-weight:700;}
+  .check-row .mark.ok{color:var(--accent);}
+  .check-row .mark.bad{color:var(--danger);}
+  .check-row .txt{color:var(--text);}
+  .check-row .txt small{display:block; color:var(--text-muted); font-weight:400;}
+
+
+
+  /* ── Alert ── */
+  .alert{
+    border:1.5px solid var(--alert-border);
+    background:var(--alert-bg);
+    color:var(--alert-text);
+    font-size:12px;
+    padding:12px 14px;
+    border-radius:10px;
+    font-weight:600;
+    line-height:1.5;
+    display:flex;
+    align-items:flex-start;
+    gap:8px;
+    transition:all .4s;
+    flex-shrink:0;
+  }
+  .alert .icon{font-size:16px; flex-shrink:0; margin-top:1px;}
+  .alert strong{color:var(--danger);}
+
+  /* ── WIPE Input ── */
+  .wipe-input-group{
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+  .wipe-input-group input{
+    flex:1;
+    padding:12px 16px;
+    border:1.5px solid var(--wipe-input-border);
+    border-radius:10px;
+    font-size:16px;
+    font-weight:700;
+    font-family:monospace;
+    background:var(--wipe-input-bg);
+    color:var(--wipe-input-text);
+    transition:all .4s;
+    letter-spacing:4px;
+    text-transform:uppercase;
+  }
+  .wipe-input-group input:focus{
+    outline:2px solid var(--input-focus);
+    border-color:transparent;
+  }
+  .wipe-input-group input::placeholder{
+    color:var(--text-muted);
+    font-weight:400;
+    letter-spacing:1px;
+    opacity:.6;
+  }
+  .wipe-input-group .wipe-status{
+    font-size:11px;
+    font-weight:700;
+    color:var(--text-muted);
+    transition:color .4s;
+    white-space:nowrap;
+  }
+  .wipe-input-group .wipe-status.valid{
+    color:var(--success);
+  }
+  .wipe-input-group .wipe-status.invalid{
+    color:var(--danger);
+  }
+
+  .wipe-hint-text{
+    font-size:11px;
+    color:var(--text-muted);
+    text-align:center;
+    transition:color .4s;
+  }
+  .wipe-hint-text code{
+    font-family:monospace;
+    background:var(--border);
+    padding:2px 10px;
+    border-radius:4px;
+    color:var(--text);
+    font-weight:700;
+    transition:all .4s;
+  }
+
+  /* ── Partition Config ── */
+  .partition-config{
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+  .partition-config input{
+    flex:1;
+    padding:8px 12px;
+    border:1.5px solid var(--input-border);
+    border-radius:8px;
+    font-size:13px;
+    font-weight:600;
+    font-family:monospace;
+    background:var(--input-bg);
+    color:var(--text);
+    width:60px;
+    transition:all .4s;
+  }
+  .partition-config input:focus{
+    outline:2px solid var(--input-focus);
+    border-color:transparent;
+  }
+  .partition-config input:disabled{opacity:0.5;}
+  .partition-config select{
+    padding:8px 12px;
+    border:1.5px solid var(--input-border);
+    border-radius:8px;
+    font-size:13px;
+    font-weight:600;
+    background:var(--input-bg);
+    color:var(--text);
+    cursor:pointer;
+    transition:all .4s;
+  }
+  .partition-config select:focus{
+    outline:2px solid var(--input-focus);
+    border-color:transparent;
+  }
+  body.dark .partition-config select option{background:#0b2a63; color:#eaf2ff;}
+
+  .partition-list{
+    max-height:180px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-bottom: 12px;
+  }
+  .partition-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 16px;
+    background:var(--partition-item-bg);
+    border: 1px solid var(--border);
+    border-radius:10px;
+    font-size:13px;
+    font-weight:600;
+    color: #ffffff;
+    transition: all .2s;
+  }
+  body.light .partition-item { color: var(--text); }
+  .partition-item .remove{
+    color:var(--danger);
+    cursor:pointer;
+    font-weight:700;
+    padding:0 4px;
+    transition:color .3s;
+  }
+  .partition-item .remove:hover{color:var(--danger-hover);}
+
+  .add-btn{
+    flex:0 0 auto;
+    padding:8px 16px;
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:700;
+    font-size:13px;
+    transition:background .3s;
+  }
+  body.dark .add-btn{color:#2a1000;}
+  .add-btn:hover{background:var(--accent-hover);}
+
+  .remaining-text{
+    font-size:11px;
+    color:var(--text-muted);
+    transition:color .4s;
+    margin-top:4px;
+  }
+
+  /* ── Modal ── */
+  .modal-overlay{
+    position:fixed;
+    top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.5);
+    backdrop-filter:blur(8px);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:1000;
+    animation:fadeIn .3s ease;
+    padding:20px;
+  }
+  body.dark .modal-overlay{backdrop-filter:blur(12px); background:rgba(0,0,0,0.7);}
+  .modal-overlay.show{display:flex;}
+  @keyframes fadeIn{
+    from{opacity:0; transform:scale(0.95);}
+    to{opacity:1; transform:scale(1);}
+  }
+  .modal{
+    background:var(--modal-bg);
+    border:1.5px solid var(--border);
+    border-radius:20px;
+    padding:32px 36px;
+    max-width:420px;
+    width:90%;
+    text-align:center;
+    box-shadow:0 24px 80px var(--modal-shadow);
+    transition:all .4s;
+    /* Long failure reports must never push the buttons off screen. */
+    max-height:88vh;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  .modal .icon{font-size:48px; display:block; margin-bottom:16px;}
+  .modal h2{
+    font-size:20px;
+    margin-bottom:8px;
+    color:var(--text);
+    transition:color .4s;
+  }
+  .modal p{
+    color:var(--text-muted);
+    font-size:14px;
+    line-height:1.6;
+    margin-bottom:20px;
+    white-space:pre-line;
+    transition:color .4s;
+  }
+  /* Error and log reports read as text, so they are left-aligned and their
+     bullet lists get room for the marker instead of being centred. */
+  .modal p.report{
+    text-align:left;
+    white-space:normal;
+    color:var(--text);
+  }
+  .modal p.report ul{margin:4px 0 0 20px; padding:0; text-align:left;}
+  .modal p.report li{margin:2px 0; line-height:1.5;}
+  .modal p.report pre{
+    white-space:pre-wrap;
+    word-break:break-word;
+    text-align:left;
+    background:var(--input-bg);
+    border-radius:8px;
+    padding:8px;
+    max-height:40vh;
+    overflow:auto;
+  }
+  .modal p.report code{word-break:break-all;}
+  /* The buttons stay reachable at the bottom of a scrolled report. */
+  .modal .btnrow{
+    justify-content:center;
+    position:sticky;
+    bottom:-4px;
+    background:var(--modal-bg);
+    padding-top:10px;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+
+
+  /* ── Toast ── */
+  .toast{
+    position:fixed;
+    bottom:30px;
+    left:50%;
+    transform:translateX(-50%);
+    background:var(--toast-bg);
+    border:1.5px solid var(--border);
+    color:var(--toast-text);
+    padding:12px 24px;
+    border-radius:12px;
+    font-weight:600;
+    font-size:14px;
+    box-shadow:0 8px 32px var(--modal-shadow);
+    display:none;
+    z-index:2000;
+    animation:slideUp .3s ease;
+    transition:all .4s;
+    max-width:90%;
+    text-align:center;
+  }
+  .toast.show{display:block;}
+  @keyframes slideUp{
+    from{opacity:0; transform:translateX(-50%) translateY(20px);}
+    to{opacity:1; transform:translateX(-50%) translateY(0);}
+  }
+
+  /* ── Progress Bar ── */
+  .progress-container{
+    margin-top:16px;
+    display:none;
+  }
+  .progress-bar-bg{
+    height:8px;
+    background:var(--border);
+    border-radius:4px;
+    overflow:hidden;
+    position:relative;
+  }
+  .progress-bar-fill{
+    height:100%;
+    background:var(--accent);
+    width:0%;
+    transition:width .3s ease;
+  }
+  .progress-text{
+    font-size:11px;
+    color:var(--text-muted);
+    margin-top:6px;
+    text-align:center;
+  }
+
+  /* ── Safe area ── */
+  @supports(padding:max(0px)){
+    .bar{padding-top:max(20px, env(safe-area-inset-top));}
+    .body{padding-bottom:max(24px, env(safe-area-inset-bottom));}
+  }
+
+  /* ── Responsive ── */
+  @media(max-width:540px){
+    body{padding:0;}
+    .app{max-width:100%; border-radius:0;}
+    .bar{padding:16px 16px 12px; font-size:10px; min-height:48px;}
+    .body{padding:16px 16px 20px; gap:14px;}
+    .theme-toggle button{padding:4px 10px; font-size:10px;}
+    .drivecard{padding:14px;}
+    .drivecard .name{font-size:14px;}
+    .modal{padding:24px 20px;}
+    .wipe-input-group input{font-size:14px; padding:10px 14px;}
+    .segbar{height:36px;}
+    .scroll-content{gap:14px;}
+    .screen-content{gap:14px;}
+  }
+
+  /* (Omitted other media queries for brevity in this task, but keep them in actual file) */
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="body">
+    <!-- Top bar: language + theme -->
+    <div class="topbar">
+      <div class="lang-select">
+        <select id="langSelect" onchange="setLanguage(this.value)" aria-label="Language" data-i18n-aria="language"></select>
+      </div>
+      <div class="theme-toggle">
+        <button class="active" onclick="setTheme('light')" data-i18n="light">☀️ Light</button>
+        <button onclick="setTheme('dark')" data-i18n="dark">🌙 Dark</button>
+      </div>
+    </div>
+
+
+    <!-- ═══ SCREEN 1: DRIVE SELECTION ═══ -->
+    <div class="screen-content active" id="step1">
+      <div class="label" id="detectedCount">Detected (0)</div>
+
+      <div class="scroll-content" id="driveList">
+        <!-- Drives injected here -->
+        <div style="text-align:center; padding:40px; color:var(--text-muted);" data-i18n="connect_hint">
+          Connect a USB drive and tap Rescan
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn ghost" onclick="rescanDrives()" data-i18n="rescan">⟳ Rescan</button>
+        <button class="btn primary" id="nextToStep2" onclick="goToStep(2)" disabled data-i18n="next">Next →</button>
+      </div>
+    </div>
+
+    <!-- ═══ SCREEN 2: PARTITION CONFIG ═══ -->
+    <div class="screen-content" id="step2">
+      <div class="label" data-i18n="purpose_q">What is this drive for?</div>
+
+      <div class="scroll-content">
+        <div class="toggle-group" id="purposeToggle">
+          <div class="toggle-opt active" onclick="setPurpose(this, 'format')" data-i18n="format_only">Format only</div>
+          <div class="toggle-opt" onclick="setPurpose(this, 'boot')" data-i18n="make_bootable">Make bootable</div>
+        </div>
+
+        <!-- ── Bootable setup ─────────────────────────────────────── -->
+        <div id="bootSection" style="display:none;border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--card-bg);">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <div style="min-width:0;">
+              <div style="font-weight:600;color:var(--text);" data-i18n="step1_image">1 · Installation image</div>
+              <div style="font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;" id="isoSummary" data-i18n="no_iso">No ISO selected</div>
+            </div>
+            <button class="btn" style="border:1px solid var(--btn-ghost-border);color:var(--btn-ghost-text);background:transparent;padding:8px 12px;border-radius:8px;white-space:nowrap;" onclick="pickIso()" data-i18n="choose_iso">Choose ISO</button>
+          </div>
+
+          <div id="bootOptions" style="display:none;margin-top:14px;">
+            <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="step2_boot_on">2 · Boot this drive on</div>
+            <div class="toggle-group" id="firmwareToggle">
+              <div class="toggle-opt" onclick="setFirmware(this, 'BIOS')" data-i18n="legacy_bios">Legacy BIOS</div>
+              <div class="toggle-opt" onclick="setFirmware(this, 'UEFI')" data-i18n="uefi">UEFI</div>
+              <div class="toggle-opt active" onclick="setFirmware(this, 'BOTH')" data-i18n="both">Both</div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:6px;" id="firmwareHint" data-i18n="firmware_hint_default">
+              Legacy BIOS needs an MBR table with boot code; UEFI needs a GPT table with a FAT32 EFI partition. The preparation below is set automatically.
+            </div>
+
+            <div style="font-weight:600;color:var(--text);margin:14px 0 6px;" data-i18n="step3_write_mode">3 · Write mode</div>
+            <input type="hidden" id="bootMode" value="AUTO">
+            <div class="mode-list" id="bootModeList">
+              <div class="mode-card selected" data-mode="AUTO" onclick="selectBootMode('AUTO')">
+                <div class="mode-head">
+                  <span class="mode-dot"></span>
+                  <span class="mode-title" data-i18n="mode_auto">Automatic (recommended)</span>
+                  <span class="mode-tag" id="modeAutoTag" data-i18n="tag_picked">Picked for you</span>
+                </div>
+                <div class="mode-desc" data-i18n="desc_auto">USBooter reads the image and chooses the write mode that boots it on the widest range of machines.</div>
+              </div>
+              <div class="mode-card" data-mode="UNIVERSAL" onclick="selectBootMode('UNIVERSAL')">
+                <div class="mode-head">
+                  <span class="mode-dot"></span>
+                  <span class="mode-title" data-i18n="mode_universal_short">Universal</span>
+                  <span class="mode-tag">BIOS + UEFI</span>
+                </div>
+                <div class="mode-desc" data-i18n="desc_universal">Partitions the stick, extracts the image's files onto FAT32 and installs GRUB 2 in the MBR gap. The whole drive stays usable.</div>
+              </div>
+              <div class="mode-card" data-mode="WINDOWS" onclick="selectBootMode('WINDOWS')">
+                <div class="mode-head">
+                  <span class="mode-dot"></span>
+                  <span class="mode-title" data-i18n="mode_windows_short">Windows installer</span>
+                  <span class="mode-tag">install.wim</span>
+                </div>
+                <div class="mode-desc" data-i18n="desc_windows">One FAT32 partition; an install.wim over 4 GB is rewritten as spanned install.swm parts Windows Setup reads natively.</div>
+              </div>
+              <div class="mode-card" data-mode="RAW_CLONE" onclick="selectBootMode('RAW_CLONE')">
+                <div class="mode-head">
+                  <span class="mode-dot"></span>
+                  <span class="mode-title" data-i18n="mode_raw_short">Raw image clone</span>
+                  <span class="mode-tag" data-i18n="tag_exact_copy">Exact copy</span>
+                </div>
+                <div class="mode-desc" data-i18n="desc_raw">Byte-for-byte copy of a hybrid ISO. The image supplies its own layout, so the unused tail stays unallocated.</div>
+              </div>
+              <div class="mode-card" data-mode="UEFI_FILE_COPY" onclick="selectBootMode('UEFI_FILE_COPY')">
+                <div class="mode-head">
+                  <span class="mode-dot"></span>
+                  <span class="mode-title" data-i18n="mode_uefi_copy_short">UEFI file copy</span>
+                  <span class="mode-tag" data-i18n="tag_uefi_only">UEFI only</span>
+                </div>
+                <div class="mode-desc" data-i18n="desc_uefi_copy">Copies the file tree onto your own partition layout without touching the MBR boot code. No legacy BIOS boot.</div>
+              </div>
+            </div>
+
+
+            <label id="bootFillLabel" style="display:none;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--text);">
+              <input type="checkbox" id="bootFillRest" onchange="updatePartitionMap()"> <span data-i18n="use_leftover">Use the leftover space as a data partition</span>
+            </label>
+            <div id="bootFillRow" style="display:none;align-items:center;gap:8px;margin-top:8px;">
+              <span style="font-size:12px;color:var(--text-muted);" data-i18n="data_fs">Data partition format</span>
+              <select id="bootDataFs" style="flex:1;padding:6px;border-radius:8px;background:var(--input-bg);color:var(--text);border:1px solid var(--input-border);">
+                <option value="exFAT" selected>exFAT</option>
+                <option value="FAT32">FAT32</option>
+              </select>
+            </div>
+
+            <div id="persistenceBlock" style="display:none;margin-top:14px;">
+              <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="step_persistence">4 &middot; Persistence (live Linux)</div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);">
+                <input type="checkbox" id="persistChk" onchange="onPersistenceChanged()">
+                <span data-i18n="persist_enable">Keep files and settings between boots</span>
+              </label>
+              <div id="persistRow" style="display:none;align-items:center;gap:8px;margin-top:8px;">
+                <span style="font-size:12px;color:var(--text-muted);" data-i18n="persist_size">Persistence size (MB)</span>
+                <input type="number" id="persistSize" value="4000" min="256" step="256" style="flex:1;min-width:0;padding:6px;border-radius:8px;background:var(--input-bg);color:var(--text);border:1px solid var(--input-border);">
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:6px;" id="persistHint" data-i18n="persist_hint">
+                A separate ext2 partition is created and labelled so the live system stores your changes in it.
+              </div>
+              <div id="persistCompat" class="mode-note"></div>
+              <div id="persistPreview" style="display:none;margin-top:8px;">
+                <div style="font-size:12px;font-weight:600;color:var(--text);" data-i18n="exactly_written">Exactly what will be written</div>
+                <div class="io-line" id="persistArgs"></div>
+                <div class="io-line" id="persistConf"></div>
+              </div>
+            </div>
+
+
+            <details id="advancedBlock" style="margin-top:14px;">
+              <summary style="cursor:pointer;font-weight:600;color:var(--text);" data-i18n="advanced">Advanced options</summary>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                <span style="font-size:12px;color:var(--text-muted);" data-i18n="adv_boot_size">Boot partition size (MB, 0 = automatic)</span>
+                <input type="number" id="advBootMB" value="0" min="0" step="100" style="flex:1;min-width:0;padding:6px;border-radius:8px;background:var(--input-bg);color:var(--text);border:1px solid var(--input-border);">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                <span style="font-size:12px;color:var(--text-muted);" data-i18n="adv_data_label">Data partition label</span>
+                <input type="text" id="advDataLabel" maxlength="11" placeholder="DATA" style="flex:1;min-width:0;padding:6px;border-radius:8px;background:var(--input-bg);color:var(--text);border:1px solid var(--input-border);">
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--text);">
+                <input type="checkbox" id="dryRunChk">
+                <span data-i18n="dry_run_label">Dry run &mdash; check assets, layout and the drive without writing anything</span>
+              </label>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:6px;" data-i18n="dry_run_hint">
+                A dry run validates the bundled bootloader, the image, the planned partitions and the drive's readability, then writes a report. Nothing on the drive is touched.
+              </div>
+            </details>
+
+            <div style="font-weight:600;color:var(--text);margin:14px 0 6px;" data-i18n="step4_checks">4 &middot; Final checks</div>
+            <select id="bootVerify" onchange="onVerifyChanged()" style="width:100%;padding:8px;border-radius:8px;background:var(--input-bg);color:var(--text);border:1px solid var(--input-border);">
+              <option value="FULL" selected data-i18n="verify_full">Full verification &mdash; hash everything, then check boot files</option>
+              <option value="BOOT_FILES" data-i18n="verify_boot">Boot files only &mdash; fast, checks /.disk/info and /boot</option>
+              <option value="NONE" data-i18n="verify_none">Skip checks &mdash; fastest flash</option>
+            </select>
+            <div id="verifyHint" style="font-size:12px;color:var(--text-muted);margin-top:6px;"></div>
+            <div id="isoWarnings" style="margin-top:10px;font-size:12px;color:var(--danger);"></div>
+            <div id="windowsEditions" style="display:none;margin-top:10px;padding:10px;border-left:3px solid var(--step-dot-active);font-size:12px;color:var(--text-muted);"></div>
+            <button class="btn" style="margin-top:10px;background:transparent;border:none;color:var(--text-muted);font-size:12px;padding:0;" onclick="clearIso()" data-i18n="remove_iso">Remove ISO</button>
+          </div>
+        </div>
+
+        <div id="rawCloneNote" style="display:none;font-size:12px;color:var(--text-muted);border-left:3px solid var(--step-dot-active);padding:8px 10px;" data-i18n="note_raw_long">
+          Exact raw clone copies the image's partition table and bootloaders without modification. Custom partition settings cannot be combined with this mode; unused capacity stays unallocated. Choose UEFI file copy to configure partitions.
+        </div>
+
+        <div id="prepSection">
+        <div class="label" style="margin-bottom:6px;" id="prepHeading" data-i18n="preparation">Preparation</div>
+        <div>
+          <div class="label" style="margin-bottom:6px;" data-i18n="table_format">Table Format</div>
+          <div class="toggle-group" id="tableToggle">
+            <div class="toggle-opt active" onclick="switchTable(this, 'MBR')">MBR</div>
+            <div class="toggle-opt" onclick="switchTable(this, 'GPT')">GPT</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="label" style="margin-bottom:6px;" data-i18n="partition_scheme">Partition Scheme</div>
+          <div class="toggle-group" id="schemeToggle">
+            <div class="toggle-opt active" onclick="switchScheme(this, 'single')" data-i18n="single">Single</div>
+            <div class="toggle-opt" onclick="switchScheme(this, 'dual')" data-i18n="dual">Dual</div>
+            <div class="toggle-opt" onclick="switchScheme(this, 'multi')" data-i18n="multi">Multi</div>
+          </div>
+          <button class="btn ghost" id="wtgPresetBtn" type="button" onclick="applyWtgPreset()" style="display:none;width:100%;margin-top:8px;" data-i18n="wtg_preset">Windows To Go-ready: FAT32 ESP + NTFS</button>
+          <div id="wtgPresetHint" style="display:none;font-size:12px;color:var(--text-muted);margin-top:6px;" data-i18n="wtg_hint">Creates the UEFI disk layout only. Windows is not deployed to the NTFS partition.</div>
+        </div>
+
+        <div id="singleConfig">
+          <div class="label" style="margin-bottom:6px;" data-i18n="file_system">File System</div>
+          <div class="toggle-group" id="fsToggle">
+            <div class="toggle-opt active" onclick="switchFS(this, 'FAT32')">FAT32</div>
+            <div class="toggle-opt" onclick="switchFS(this, 'exFAT')">exFAT</div>
+            <div class="toggle-opt" onclick="switchFS(this, 'NTFS')">NTFS</div>
+          </div>
+        </div>
+
+        <div id="dualConfig" style="display:none;">
+          <div class="label" style="margin-bottom:6px;" data-i18n="p1_esp">Partition 1 (ESP)</div>
+          <div class="partition-config">
+            <select id="p1fs" onchange="updatePartitionMap()">
+              <option value="FAT32">FAT32</option>
+              <option value="exFAT">exFAT</option>
+            </select>
+            <input type="number" id="p1size" value="500" min="1" onchange="updatePartitionMap()">
+            <select id="p1unit" onchange="updatePartitionMap()" style="min-width:60px;">
+              <option value="MB" selected>MB</option>
+              <option value="GB">GB</option>
+            </select>
+          </div>
+          <div class="label" style="margin-bottom:6px;margin-top:6px;" data-i18n="p2_data">Partition 2 (Data)</div>
+          <div class="partition-config">
+            <select id="p2fs" onchange="updatePartitionMap()">
+              <option value="FAT32">FAT32</option>
+              <option value="exFAT" selected>exFAT</option>
+              <option value="NTFS">NTFS</option>
+            </select>
+            <input type="text" id="p2size" value="Remaining" disabled data-i18n-value="remaining_word">
+          </div>
+        </div>
+
+        <div id="multiConfig" style="display:none;">
+          <div class="label" style="margin-bottom:6px;" data-i18n="partitions">Partitions</div>
+          <div class="partition-list" id="partitionList"></div>
+          <div class="partition-config">
+            <select id="newPartitionFS" onchange="updatePartitionMap()">
+              <option value="FAT32">FAT32</option>
+              <option value="exFAT">exFAT</option>
+              <option value="NTFS">NTFS</option>
+            </select>
+            <input type="number" id="newPartitionSize" placeholder="Size" data-i18n-ph="size" min="1" onchange="updatePartitionMap()">
+            <select id="newPartitionUnit" onchange="updatePartitionMap()" style="min-width:60px;">
+              <option value="MB" selected>MB</option>
+              <option value="GB">GB</option>
+            </select>
+            <button class="add-btn" onclick="addPartition()" data-i18n="add">+ Add</button>
+          </div>
+          <div class="remaining-text">
+            <span data-i18n="remaining_label">Remaining:</span> <span id="remainingSpace">0</span> <span id="remainingUnit">MB</span>
+          </div>
+        </div>
+
+        </div><!-- /prepSection -->
+
+        <!-- Partition Map -->
+        <div>
+          <div class="label" style="margin-bottom:6px;" data-i18n="disk_map">Disk Map — to scale</div>
+          <div class="diskmap">
+            <div class="ruler">
+              <span>0 GB</span>
+              <span id="mapMid">...</span>
+              <span id="mapTotal">...</span>
+            </div>
+            <div class="segbar" id="partitionMap"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn back" onclick="goToStep(1)" data-i18n="back">← Back</button>
+        <button class="btn primary" onclick="goToStep(3)" data-i18n="review">Review →</button>
+      </div>
+    </div>
+
+    <!-- ═══ SCREEN 3: CONFIRMATION ═══ -->
+    <div class="screen-content" id="step3">
+      <div class="label" data-i18n="review_confirm">Review &amp; Confirm</div>
+
+      <div class="scroll-content">
+        <div class="info-card">
+          <div class="row"><span class="k" data-i18n="drive">Drive</span><span class="v" id="confirmDrive">...</span></div>
+          <div class="row"><span class="k" data-i18n="capacity">Capacity</span><span class="v" id="confirmCapacity">...</span></div>
+          <div class="row"><span class="k" data-i18n="table">Table</span><span class="v" id="confirmTable">MBR</span></div>
+          <div class="row"><span class="k" data-i18n="scheme">Scheme</span><span class="v" id="confirmScheme">Single</span></div>
+          <div class="row"><span class="k" data-i18n="file_system">File System</span><span class="v" id="confirmFS">...</span></div>
+          <div class="row" id="confirmBootRow" style="display:none;"><span class="k" data-i18n="bootable">Bootable</span><span class="v" id="confirmIso">...</span></div>
+          <div class="row" id="confirmFirmwareRow" style="display:none;"><span class="k" data-i18n="boots_on">Boots on</span><span class="v" id="confirmFirmware">...</span></div>
+          <div class="row" id="confirmModeRow" style="display:none;"><span class="k" data-i18n="write_mode">Write mode</span><span class="v" id="confirmMode">...</span></div>
+        </div>
+
+        <div class="diskmap">
+          <div class="segbar" id="confirmMap"></div>
+        </div>
+
+        <div class="alert">
+          <span class="icon">⚠</span>
+          <span data-i18n="erase_warning_1">All data on this drive will be</span> <strong data-i18n="erase_warning_2">permanently erased</strong>.
+        </div>
+
+        <div>
+          <div class="label" style="margin-bottom:6px;" data-i18n="type_wipe">Type WIPE to confirm</div>
+          <div class="wipe-input-group">
+            <input type="text" id="wipeInput" placeholder="Type WIPE here..." data-i18n-ph="wipe_placeholder" maxlength="4" autocomplete="off" spellcheck="false" oninput="checkWipe(this.value)">
+            <span class="wipe-status" id="wipeStatus" data-i18n="waiting">⏳ Waiting</span>
+          </div>
+        </div>
+
+        <div class="progress-container" id="formatProgress">
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+          <div class="progress-text" id="progressStatus" data-i18n="formatting">Formatting...</div>
+          <div class="io-line" id="ioLine"></div>
+        </div>
+
+        <div class="info-card" id="preflightCard" style="display:none;margin-top:12px;">
+          <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="preflight_title">Preflight self-test</div>
+          <div id="preflightSummary" style="font-size:12px;color:var(--text-muted);"></div>
+          <div id="preflightChecks" style="margin-top:6px;"></div>
+        </div>
+
+        <div class="info-card" id="reverifyCard" style="display:none;margin-top:12px;">
+          <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="reverify_title">Verification re-run</div>
+          <div id="reverifySummary" style="font-size:12px;color:var(--text-muted);"></div>
+          <div id="reverifyChecks" style="margin-top:6px;"></div>
+        </div>
+
+        <div class="info-card" id="repairCard" style="display:none;margin-top:12px;">
+          <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="repair_title">Partition repair</div>
+          <div id="repairSummary" style="font-size:12px;color:var(--text-muted);"></div>
+          <div id="repairChecks" style="margin-top:6px;"></div>
+          <button class="btn" id="repairApplyBtn" onclick="repairPartitions(false)" style="display:none;width:100%;margin-top:10px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_apply">Repair without losing files</button>
+          <button class="btn danger" id="repairRiskyBtn" onclick="confirmRiskyRepair()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_risky">Repair anyway (files may be lost)</button>
+        </div>
+
+        <button class="btn" id="preflightBtn" onclick="runPreflight()" style="width:100%;margin-top:12px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="run_preflight">Run preflight self-test</button>
+        <button class="btn" id="reverifyBtn" onclick="rerunVerification()" style="display:none;width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="rerun_verify">Re-run verification (no reflash)</button>
+        <button class="btn" id="repairScanBtn" onclick="scanPartitions()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_scan">Check &amp; repair partitions (no data loss)</button>
+        <button class="btn" id="exportReportBtn" onclick="exportReport()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="export_report">Export verification report</button>
+        <button class="btn" onclick="showTechnicalLog()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="view_log">View technical log</button>
+        <button class="btn" onclick="saveLogFile()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="save_log">Save detailed log to file</button>
+      </div>
+
+      <div class="btnrow" style="flex-wrap:wrap;">
+        <button class="btn back" id="backBtn" onclick="goToStep(2)" data-i18n="back">← Back</button>
+        <button class="btn ghost" id="ejectBtn" onclick="safelyRemove(state.selectedDeviceName)" data-i18n="eject">⏏ Eject</button>
+        <button class="btn danger" id="wipeBtn" onclick="confirmWipe()" disabled data-i18n="wipe_drive">Wipe Drive</button>
+        <button class="btn danger" id="stopBtn" onclick="cancelFlash()" style="display:none;" data-i18n="stop_flash">■ Stop</button>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <span class="icon" id="modalIcon">✅</span>
+    <h2 id="modalTitle" data-i18n="drive_wiped">Drive Wiped</h2>
+    <p id="modalMessage" data-i18n="success">Success!</p>
+    <div class="btnrow" id="modalBtnRow">
+      <button class="btn primary" onclick="closeModal()" data-i18n="done">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="i18n.js"></script>
+<script>
+  function setTheme(theme) {
+    document.body.className = theme;
+    const btns = document.querySelectorAll('.theme-toggle button');
+    btns.forEach(b => b.classList.remove('active'));
+    if (btns[0]) btns[0].classList.toggle('active', theme === 'light');
+    if (btns[1]) btns[1].classList.toggle('active', theme === 'dark');
+    localStorage.setItem('theme', theme);
+  }
+  setTheme(localStorage.getItem('theme') || 'light');
+
+  // ── Language ───────────────────────────────────────────────
+  let lastDevices = [];
+
+  function buildLangSelect() {
+    const sel = document.getElementById('langSelect');
+    if (!sel) return;
+    sel.innerHTML = I18N.supported()
+      .map(l => `<option value="${l}">${I18N.name(l)}</option>`).join('');
+    sel.value = I18N.getLang();
+  }
+
+  /** Re-renders every visible string in the current language. */
+  function applyLanguage() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+      el.placeholder = t(el.getAttribute('data-i18n-ph'));
+    });
+    document.querySelectorAll('[data-i18n-value]').forEach(el => {
+      el.value = t(el.getAttribute('data-i18n-value'));
+    });
+    document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+      el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
+    });
+    const sel = document.getElementById('langSelect');
+    if (sel) sel.value = I18N.getLang();
+    // Dynamic pieces
+    updateDrives(lastDevices);
+    if (state.iso) renderIsoSummary(); else document.getElementById('isoSummary').textContent = t('no_iso');
+    document.getElementById('prepHeading').textContent =
+      state.purpose === 'boot' ? t('preparation_boot') : t('preparation');
+    renderMultiList();
+    refreshBootUi();
+    refreshNtfsCapability();
+    refreshPersistenceAvailability();
+    checkWipe(document.getElementById('wipeInput').value || '');
+    if (state.currentStep === 3) updateConfirmation();
+  }
+
+  function setLanguage(lang) {
+    I18N.setLang(lang);
+    applyLanguage();
+    const modeInput = document.getElementById('bootMode');
+    if (modeInput && typeof selectBootMode === 'function') selectBootMode(modeInput.value);
+  }
+
+  I18N.setLang(I18N.detect());
+
+  let state = {
+    currentStep: 1,
+    selectedDeviceName: null,
+    driveData: null, // Probed data
+    tableFormat: 'MBR',
+    partitionScheme: 'single',
+    fileSystem: 'FAT32',
+    partitions: [],
+    purpose: 'format',   // 'format' | 'boot'
+    firmware: 'BOTH',    // BIOS | UEFI | BOTH
+    iso: null
+    ,ntfs: null
+  };
+
+  // ── Purpose / firmware ─────────────────────────────────────
+  function setToggleValue(containerId, index) {
+    const opts = document.querySelectorAll('#' + containerId + ' .toggle-opt');
+    opts.forEach((o, i) => o.classList.toggle('active', i === index));
+  }
+
+  function setPurpose(el, purpose) {
+    state.purpose = purpose;
+    document.querySelectorAll('#purposeToggle .toggle-opt').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('bootSection').style.display = purpose === 'boot' ? 'block' : 'none';
+    document.getElementById('prepHeading').textContent =
+      purpose === 'boot' ? t('preparation_boot') : t('preparation');
+    refreshBootUi();
+  }
+
+  function setFirmware(el, fw) {
+    state.firmware = fw;
+    document.querySelectorAll('#firmwareToggle .toggle-opt').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+    applyFirmwareDefaults();
+    refreshBootUi();
+  }
+
+  function onBootModeChanged() { refreshBootUi(); }
+
+  /** Explains the speed/confidence trade-off of the selected final checks. */
+  function onVerifyChanged() {
+    const el = document.getElementById('bootVerify');
+    const hint = document.getElementById('verifyHint');
+    if (!el || !hint) return;
+    hint.textContent = {
+      FULL: t('verify_hint_full'),
+      BOOT_FILES: t('verify_hint_boot'),
+      NONE: t('verify_hint_none')
+    }[el.value] || '';
+  }
+
+  /** AUTO resolves to whatever the analyser suggested for this image. */
+  function effectiveBootMode() {
+    const chosen = document.getElementById('bootMode').value;
+    if (chosen !== 'AUTO') return chosen;
+    return (state.iso && state.iso.suggestedMode) || 'UNIVERSAL';
+  }
+
+  /** Legacy BIOS wants MBR, UEFI wants GPT + a FAT32 ESP - set that up for the user. */
+  function applyFirmwareDefaults() {
+    if (state.purpose !== 'boot') return;
+    if (effectiveBootMode() === 'RAW_CLONE') return; // the image decides
+    if (state.firmware === 'UEFI') {
+      state.tableFormat = 'GPT'; setToggleValue('tableToggle', 1);
+      state.partitionScheme = 'dual'; setToggleValue('schemeToggle', 1);
+    } else {
+      state.tableFormat = 'MBR'; setToggleValue('tableToggle', 0);
+      state.partitionScheme = 'dual'; setToggleValue('schemeToggle', 1);
+    }
+    document.getElementById('singleConfig').style.display = 'none';
+    document.getElementById('dualConfig').style.display = 'block';
+    document.getElementById('multiConfig').style.display = 'none';
+    document.getElementById('p1fs').value = 'FAT32';
+  }
+
+  function refreshBootUi() {
+    const booting = state.purpose === 'boot' && !!state.iso;
+    const mode = booting ? effectiveBootMode() : null;
+    const raw = mode === 'RAW_CLONE';
+    const win = mode === 'WINDOWS';
+    const universal = mode === 'UNIVERSAL' || win;
+    const note = document.getElementById('rawCloneNote');
+    note.style.display = (raw || universal) ? 'block' : 'none';
+    note.textContent = win ? t('note_windows') : (universal ? t('note_universal') : t('note_raw'));
+    document.getElementById('prepSection').style.display = (raw || universal) ? 'none' : 'block';
+    const fillRow = document.getElementById('bootFillRow');
+    const fillLabel = document.getElementById('bootFillLabel');
+    const fillToggle = document.getElementById('bootFillRest');
+    if (fillLabel) fillLabel.style.display = universal ? 'flex' : 'none';
+    if (fillRow) fillRow.style.display = (universal && fillToggle && fillToggle.checked) ? 'flex' : 'none';
+    if (fillToggle) {
+      fillToggle.disabled = !universal;
+      if (!universal) fillToggle.checked = false;
+    }
+    const hint = document.getElementById('firmwareHint');
+    if (hint) {
+      hint.textContent = state.firmware === 'UEFI'
+        ? t('firmware_hint_uefi')
+        : (state.firmware === 'BIOS' ? t('firmware_hint_bios') : t('firmware_hint_both'));
+    }
+    onVerifyChanged();
+    refreshPersistenceAvailability();
+    if (booting) updateIsoWarnings();
+    updatePartitionMap();
+  }
+
+  function updateIsoWarnings() {
+    const box = document.getElementById('isoWarnings');
+    if (!box || !state.iso) return;
+    const mode = effectiveBootMode();
+    const w = (state.iso.warnings || []).map(x => I18N.tNative(String(x)));
+    if (state.firmware !== 'UEFI' && mode === 'UEFI_FILE_COPY') {
+      w.push(t('warn_uefi_only'));
+    }
+    if (state.firmware !== 'BIOS' && !state.iso.hasEfiBoot) {
+      w.push(t('warn_no_efi'));
+    }
+    if (state.firmware !== 'UEFI' && !state.iso.hasBiosBoot && !state.iso.isHybrid) {
+      w.push(t('warn_no_bios'));
+    }
+    box.innerHTML = w.map(x => '⚠ ' + x).join('<br>');
+  }
+
+  function goToStep(step) {
+    state.currentStep = step;
+    document.querySelectorAll('.screen-content').forEach(el => el.classList.remove('active'));
+    document.getElementById('step' + step).classList.add('active');
+    document.querySelectorAll('.step-dot').forEach((dot, i) => {
+      dot.classList.remove('active', 'done');
+      if (i + 1 === step) dot.classList.add('active');
+      else if (i + 1 < step) dot.classList.add('done');
+    });
+    if (step === 3) updateConfirmation();
+    if (step === 2) updatePartitionMap();
+  }
+
+  // ── Android Bridges ──
+  function rescanDrives() {
+    showToast(t('toast_scanning'));
+    if (window.Android) Android.rescanDrives();
+  }
+
+  function updateDrives(devices) {
+    devices = devices || [];
+    lastDevices = devices;
+    const list = document.getElementById('driveList');
+    const count = document.getElementById('detectedCount');
+    count.textContent = t('detected', { n: devices.length });
+    list.innerHTML = '';
+
+    if (devices.length === 0) {
+      list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">' +
+        t('no_drives') + '</div>';
+      return;
+    }
+
+    devices.forEach(d => {
+      const card = document.createElement('div');
+      card.className = 'drivecard';
+      card.id = 'drive-' + d.deviceName.replace(/\//g, '-');
+      card.onclick = () => selectDriveUI(card, d);
+      card.innerHTML = `
+        <div class="name">${d.name}</div>
+        <div class="meta">${d.deviceName}</div>
+        <div class="details">
+          <div class="detail-row"><span class="detail-k">${t('capacity')}</span><span class="detail-v" id="size-${card.id}">${d.sizeHuman || '...'}</span></div>
+          <div class="detail-row"><span class="detail-k">${t('vendor_id')}</span><span class="detail-v">${d.vendorId}</span></div>
+          <div class="detail-row"><span class="detail-k">${t('product_id')}</span><span class="detail-v">${d.productId}</span></div>
+          <button class="btn ghost small" style="margin-top:10px; width:100%; border-color:var(--text-light); color:var(--text-light);" onclick="event.stopPropagation(); safelyRemove('${d.deviceName}')">${t('safely_remove')}</button>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+  }
+
+  function safelyRemove(deviceName) {
+    if (!deviceName) return;
+    showToast(t('toast_stop'));
+    if (window.Android) Android.safelyRemove(deviceName);
+    // If we are on Step 3, go back to Step 1
+    if (state.currentStep !== 1) goToStep(1);
+  }
+
+  function selectDriveUI(el, d) {
+    document.querySelectorAll('.drivecard').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    state.selectedDeviceName = d.deviceName;
+    document.getElementById('nextToStep2').disabled = false;
+
+    if (window.Android) Android.selectDrive(d.deviceName);
+  }
+
+  function onDriveProbed(drive) {
+    state.driveData = drive;
+    const sizeEl = document.getElementById('size-drive-' + drive.deviceName.replace(/\//g, '-'));
+    if (sizeEl) sizeEl.textContent = drive.size;
+    const cached = lastDevices.find(d => d.deviceName === drive.deviceName);
+    if (cached) cached.sizeHuman = drive.size;
+
+    // Default partition
+    const totalSizeMB = Math.floor(drive.sizeBytes / 1000000);
+    state.partitions = [{ fs: 'exFAT', sizeMB: totalSizeMB }];
+    updatePartitionMap();
+    refreshNtfsCapability();
+  }
+
+  function refreshNtfsCapability() {
+    if (!window.Android || !Android.ntfsCapability) return;
+    try { state.ntfs = JSON.parse(Android.ntfsCapability()); } catch (_) { state.ntfs = { available: false, detail: t('ntfs_selftest_norun') }; }
+    const button = document.getElementById('wtgPresetBtn');
+    const hint = document.getElementById('wtgPresetHint');
+    button.style.display = 'block';
+    button.disabled = !state.ntfs.available;
+    hint.style.display = 'block';
+    hint.textContent = state.ntfs.available
+      ? t('wtg_hint')
+      : t('unavailable_prefix') + ' ' + (state.ntfs.detail || t('ntfs_selftest_failed'));
+  }
+
+  function applyWtgPreset() {
+    if (!state.ntfs || !state.ntfs.available) { showToast((state.ntfs && state.ntfs.detail) || t('ntfs_unavailable')); return; }
+    state.tableFormat = 'GPT'; setToggleValue('tableToggle', 1);
+    state.partitionScheme = 'dual'; setToggleValue('schemeToggle', 1);
+    document.getElementById('singleConfig').style.display = 'none';
+    document.getElementById('dualConfig').style.display = 'block';
+    document.getElementById('multiConfig').style.display = 'none';
+    document.getElementById('p1fs').value = 'FAT32';
+    document.getElementById('p1size').value = '500';
+    document.getElementById('p1unit').value = 'MB';
+    document.getElementById('p2fs').value = 'NTFS';
+    updatePartitionMap();
+  }
+
+  function switchTable(el, format) {
+    state.tableFormat = format;
+    document.querySelectorAll('#tableToggle .toggle-opt').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+    updatePartitionMap();
+  }
+
+  function switchScheme(el, scheme) {
+    state.partitionScheme = scheme;
+    document.querySelectorAll('#schemeToggle .toggle-opt').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('singleConfig').style.display = scheme === 'single' ? 'block' : 'none';
+    document.getElementById('dualConfig').style.display = scheme === 'dual' ? 'block' : 'none';
+    document.getElementById('multiConfig').style.display = scheme === 'multi' ? 'block' : 'none';
+    updatePartitionMap();
+  }
+
+  function switchFS(el, fs) {
+    state.fileSystem = fs;
+    document.querySelectorAll('#fsToggle .toggle-opt').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+    updatePartitionMap();
+  }
+
+  function showNTFSWarning() {
+    showToast(t('toast_ntfs'));
+  }
+
+  function formatSize(mb) {
+    if (mb >= 1000) return (mb / 1000).toFixed(1) + ' GB';
+    return mb.toFixed(0) + ' MB';
+  }
+
+  function updatePartitionMap() {
+    if (!state.driveData) return;
+    const totalBytes = state.driveData.sizeBytes;
+    const totalMB = totalBytes / 1000000;
+    let partitions = [];
+    let usedMB = 0;
+
+    if (state.purpose === 'boot' && state.iso && effectiveBootMode() === 'UNIVERSAL') {
+      const fill = document.getElementById('bootFillRest').checked;
+      const isoMB = Math.min(state.iso.sizeBytes / 1000000 * 1.15 + 256, totalMB);
+      const bootMB = fill && (totalMB - isoMB) > 1000 ? isoMB : totalMB;
+      partitions = [{ label: (state.iso.volumeLabel || 'USBOOTER'), sizeMB: bootMB, fs: 'FAT32' }];
+      if (bootMB < totalMB) {
+        partitions.push({ label: 'DATA', sizeMB: totalMB - bootMB, fs: document.getElementById('bootDataFs').value });
+      }
+      usedMB = totalMB;
+    } else if (state.purpose === 'boot' && state.iso && effectiveBootMode() === 'RAW_CLONE') {
+      const isoMB = Math.min(state.iso.sizeBytes / 1000000, totalMB);
+      const fill = document.getElementById('bootFillRest').checked;
+      partitions = [{ label: state.iso.volumeLabel || 'IMAGE', sizeMB: isoMB, fs: 'ISO' }];
+      if (fill && totalMB - isoMB > 64) {
+        partitions.push({ label: 'DATA', sizeMB: totalMB - isoMB, fs: document.getElementById('bootDataFs').value });
+      }
+      usedMB = totalMB;
+    } else if (state.partitionScheme === 'single') {
+      partitions = [{ label: state.fileSystem, sizeMB: totalMB, fs: state.fileSystem }];
+      usedMB = totalMB;
+    } else if (state.partitionScheme === 'dual') {
+      let p1val = parseFloat(document.getElementById('p1size').value) || 0;
+      const p1unit = document.getElementById('p1unit').value;
+      const p1MB = p1unit === 'GB' ? p1val * 1000 : p1val;
+
+      const p1fs = document.getElementById('p1fs').value;
+      const p2fs = document.getElementById('p2fs').value;
+      partitions = [{ label: 'ESP', sizeMB: p1MB, fs: p1fs }, { label: 'DATA', sizeMB: totalMB - p1MB, fs: p2fs }];
+      usedMB = totalMB;
+    } else {
+      partitions = state.partitions.map((p, i) => ({ label: 'P' + (i+1), sizeMB: p.sizeMB, fs: p.fs }));
+      usedMB = state.partitions.reduce((s, p) => s + p.sizeMB, 0);
+    }
+
+    const isOver = usedMB > totalMB + 0.1;
+    const warnEl = document.getElementById('remainingSpace');
+    const nextBtn = document.querySelector('#step2 .btn.primary');
+
+    if (isOver) {
+        warnEl.parentElement.style.color = 'var(--danger)';
+        warnEl.textContent = t('exceeds', { n: (usedMB - totalMB).toFixed(1) });
+        document.getElementById('remainingUnit').textContent = '';
+        if (nextBtn) nextBtn.disabled = true;
+    } else {
+        warnEl.parentElement.style.color = 'var(--text-muted)';
+        updateRemainingSpace();
+        if (nextBtn) nextBtn.disabled = false;
+    }
+
+    let segHtml = '';
+    partitions.forEach((p, i) => {
+      const pct = (p.sizeMB / totalMB) * 100;
+      segHtml += `<div class="seg ${i === 0 ? 'esp' : 'data'}" style="flex:0 0 ${Math.max(pct, 10)}%; ${isOver ? 'opacity:0.6;' : ''}">
+        <span class="seg-label">${p.label}</span>
+        <span class="seg-size">${formatSize(p.sizeMB)}</span>
+      </div>`;
+    });
+
+    document.getElementById('partitionMap').innerHTML = segHtml;
+    document.getElementById('mapTotal').textContent = formatSize(totalMB);
+    document.getElementById('mapMid').textContent = formatSize(totalMB / 2);
+  }
+
+  function addPartition() {
+    const fs = document.getElementById('newPartitionFS').value;
+    const sizeVal = parseFloat(document.getElementById('newPartitionSize').value);
+    const unit = document.getElementById('newPartitionUnit').value;
+    if (!sizeVal) return;
+
+    const sizeMB = unit === 'GB' ? sizeVal * 1000 : sizeVal;
+    state.partitions.push({ fs, sizeMB });
+    renderMultiList();
+    updatePartitionMap();
+  }
+
+  function renderMultiList() {
+    const list = document.getElementById('partitionList');
+    list.innerHTML = '';
+    state.partitions.forEach((p, i) => {
+      const item = document.createElement('div');
+      item.className = 'partition-item';
+      item.innerHTML = `<span>${t('partition_n', { n: i + 1 })}</span><span>${p.fs} · ${formatSize(p.sizeMB)}</span><span class="remove" onclick="removeP(${i})">✕</span>`;
+      list.appendChild(item);
+    });
+  }
+  function removeP(i) { state.partitions.splice(i, 1); renderMultiList(); updatePartitionMap(); }
+
+  function updateRemainingSpace() {
+    if (!state.driveData) return;
+    const totalMB = state.driveData.sizeBytes / 1000000;
+    const usedMB = state.partitions.reduce((s, p) => s + p.sizeMB, 0);
+    const remainingMB = totalMB - usedMB;
+
+    if (remainingMB >= 1000) {
+      document.getElementById('remainingSpace').textContent = (remainingMB / 1000).toFixed(1);
+      document.getElementById('remainingUnit').textContent = 'GB';
+    } else {
+      document.getElementById('remainingSpace').textContent = Math.max(0, remainingMB).toFixed(0);
+      document.getElementById('remainingUnit').textContent = 'MB';
+    }
+  }
+
+  function updateConfirmation() {
+    if (!state.driveData) return;
+    document.getElementById('confirmDrive').textContent = state.driveData.name;
+    document.getElementById('confirmCapacity').textContent = state.driveData.size;
+    document.getElementById('confirmTable').textContent = state.tableFormat;
+    document.getElementById('confirmScheme').textContent =
+      { single: t('single'), dual: t('dual'), multi: t('multi') }[state.partitionScheme] || state.partitionScheme;
+    document.getElementById('confirmMap').innerHTML = document.getElementById('partitionMap').innerHTML;
+
+    if (state.partitionScheme === 'single') {
+        document.getElementById('confirmFS').textContent = state.fileSystem;
+    } else if (state.partitionScheme === 'dual') {
+        document.getElementById('confirmFS').textContent = document.getElementById('p1fs').value + " + " + document.getElementById('p2fs').value;
+    } else {
+        document.getElementById('confirmFS').textContent = state.partitions.map(p => p.fs).join(" + ");
+    }
+
+    const booting = state.purpose === 'boot' && !!state.iso;
+    document.getElementById('confirmBootRow').style.display = booting ? 'flex' : 'none';
+    document.getElementById('confirmFirmwareRow').style.display = booting ? 'flex' : 'none';
+    document.getElementById('confirmModeRow').style.display = booting ? 'flex' : 'none';
+    if (booting) {
+      const mode = effectiveBootMode();
+      document.getElementById('confirmIso').textContent = state.iso.name;
+      document.getElementById('confirmFirmware').textContent =
+        { BIOS: t('fw_bios'), UEFI: t('fw_uefi'), BOTH: t('fw_both') }[state.firmware];
+      document.getElementById('confirmMode').textContent =
+        { RAW_CLONE: t('cm_raw'), UNIVERSAL: t('cm_universal'), WINDOWS: t('cm_windows') }[mode] || t('cm_uefi_copy');
+      if (mode === 'UNIVERSAL' || mode === 'WINDOWS') {
+        document.getElementById('confirmTable').textContent = t('mbr_auto');
+        document.getElementById('confirmScheme').textContent =
+          document.getElementById('bootFillRest').checked ? t('boot_and_data') : t('single_boot');
+        document.getElementById('confirmFS').textContent = t('fat32_grub');
+      }
+      if (mode === 'RAW_CLONE') {
+        document.getElementById('confirmTable').textContent = t('exact_layout');
+        document.getElementById('confirmScheme').textContent = t('image_layout');
+        document.getElementById('confirmFS').textContent = state.iso.volumeLabel || state.iso.name;
+      }
+    }
+  }
+
+  function checkWipe(v) {
+    const btn = document.getElementById('wipeBtn');
+    if (v.toUpperCase() === 'WIPE') {
+      btn.disabled = false;
+      document.getElementById('wipeStatus').textContent = t('confirmed');
+      document.getElementById('wipeStatus').className = 'wipe-status valid';
+    } else {
+      btn.disabled = true;
+      document.getElementById('wipeStatus').textContent = t('waiting');
+      document.getElementById('wipeStatus').className = 'wipe-status';
+    }
+  }
+
+  // ── Bootable ISO ──────────────────────────────────────────
+
+  function pickIso() {
+    if (window.Android && Android.pickIso) Android.pickIso();
+    else showToast(t('toast_iso_app_only'));
+  }
+
+  function clearIso() {
+    state.iso = null;
+    document.getElementById('isoSummary').textContent = t('no_iso');
+    document.getElementById('bootOptions').style.display = 'none';
+    refreshBootUi();
+  }
+
+  function onIsoCancelled() { /* user backed out of the picker */ }
+
+  function renderIsoSummary() {
+    const info = state.iso;
+    if (!info) return;
+    const sizeMB = Math.round(info.sizeBytes / 1000000);
+    document.getElementById('isoSummary').textContent =
+      info.name + ' \u00b7 ' + sizeMB + ' MB \u00b7 ' +
+      ({ UNIVERSAL: t('sm_universal'), RAW_CLONE: t('sm_raw'), UEFI_FILE_COPY: t('sm_uefi_copy') }[info.suggestedMode] || t('sm_universal'));
+  }
+
+  function onIsoSelected(info) {
+    state.iso = info;
+    renderIsoSummary();
+    selectBootMode('AUTO');
+    document.getElementById('bootOptions').style.display = 'block';
+    const editions = document.getElementById('windowsEditions');
+    if (info.isWindows) {
+      const list = Array.isArray(info.editions) ? info.editions : [];
+      editions.style.display = 'block';
+      editions.textContent = list.length
+        ? t('editions_kept') + ' ' + list.map(x => x.label + (x.architecture ? ' (' + x.architecture + ')' : '')).join(', ')
+        : t('editions_unreadable');
+    } else editions.style.display = 'none';
+
+    // Picking an ISO is what the user came for: switch to the bootable flow and
+    // preselect the firmware the image can actually boot on.
+    if (state.purpose !== 'boot') {
+      const bootOpt = document.querySelectorAll('#purposeToggle .toggle-opt')[1];
+      if (bootOpt) setPurpose(bootOpt, 'boot');
+    }
+    // The persistence choice stays visible for every image so the user can see
+    // that it exists - when it cannot be offered, the checkbox is disabled and
+    // the note below it says why instead of the block silently disappearing.
+    document.getElementById('persistenceBlock').style.display = 'block';
+    refreshPersistenceAvailability();
+
+    const fw = info.suggestedFirmware || 'BOTH';
+    const fwIndex = { BIOS: 0, UEFI: 1, BOTH: 2 }[fw];
+    const fwEl = document.querySelectorAll('#firmwareToggle .toggle-opt')[fwIndex];
+    if (fwEl) setFirmware(fwEl, fw); else refreshBootUi();
+  }
+
+  function confirmWipe() {
+    if (document.getElementById('wipeInput').value.toUpperCase() !== 'WIPE') return;
+
+    const config = {
+      deviceName: state.selectedDeviceName,
+      driveModel: state.driveData.name,
+      tableType: state.tableFormat,
+      partitions: []
+    };
+
+    if (state.partitionScheme === 'single') {
+      config.partitions.push({ fs: state.fileSystem, sizeMB: -1 });
+    } else if (state.partitionScheme === 'dual') {
+      const p1val = parseFloat(document.getElementById('p1size').value) || 0;
+      const p1unit = document.getElementById('p1unit').value;
+      const p1MB = p1unit === 'GB' ? p1val * 1000 : p1val;
+
+      config.partitions.push({ fs: document.getElementById('p1fs').value, sizeMB: Math.floor(p1MB), isESP: true });
+      config.partitions.push({ fs: document.getElementById('p2fs').value, sizeMB: -1 });
+    } else {
+      state.partitions.forEach(p => config.partitions.push({ fs: p.fs, sizeMB: Math.floor(p.sizeMB) }));
+    }
+
+    if (state.purpose === 'boot' && state.iso) {
+      config.boot = {
+        uri: state.iso.uri,
+        name: state.iso.name,
+        mode: document.getElementById('bootMode').value,
+        firmware: state.firmware,
+        useRemainingSpace: document.getElementById('bootFillRest').checked,
+        dataFs: document.getElementById('bootDataFs').value,
+        verify: document.getElementById('bootVerify').value !== 'NONE',
+        verification: document.getElementById('bootVerify').value,
+        persistenceMB: (persistenceEnabled()
+          ? Math.max(0, parseInt(document.getElementById('persistSize').value, 10) || 0) : 0),
+        bootPartitionMB: Math.max(0, parseInt(document.getElementById('advBootMB').value, 10) || 0),
+        dataLabel: (document.getElementById('advDataLabel').value || '').trim(),
+        targetPartitionIndex: 0
+      };
+    } else if (state.purpose === 'boot' && !state.iso) {
+      showToast(t('toast_pick_iso_first'));
+      return;
+    }
+
+    document.getElementById('wipeBtn').disabled = true;
+    document.getElementById('backBtn').disabled = true;
+    document.getElementById('formatProgress').style.display = 'block';
+    var dry = document.getElementById('dryRunChk');
+    config.dryRun = !!(dry && dry.checked);
+    document.getElementById('stopBtn').style.display = config.dryRun ? 'none' : '';
+
+    if (window.Android) Android.startFormat(JSON.stringify(config));
+  }
+
+  // Asks the running flash to stop at the next safe point.
+  function cancelFlash() {
+    if (window.Android && Android.cancelFormat) Android.cancelFormat();
+    document.getElementById('stopBtn').disabled = true;
+  }
+
+  /** True only when the user actually has persistence available and ticked. */
+  function persistenceEnabled() {
+    const chk = document.getElementById('persistChk');
+    return !!chk && chk.checked && !chk.disabled && !persistenceBlocker();
+  }
+
+  function onPersistenceChanged() {
+    const chk = document.getElementById('persistChk');
+    const on = !!chk && chk.checked && !chk.disabled;
+    document.getElementById('persistRow').style.display = on ? 'flex' : 'none';
+    renderPersistencePreview(on);
+  }
+
+  /**
+   * Decides whether the persistence checkbox can be ticked right now. A separate
+   * ext2 volume only makes sense when the image has a live initrd that looks for
+   * it AND the selected write mode is the one that builds our own layout, so the
+   * two failing cases get their own explanation instead of a hidden control.
+   */
+  function persistenceBlocker() {
+    const info = state.iso || {};
+    if (!info.name) return 'no_image';
+    if (!info.supportsPersistence) return 'image';
+    if (state.purpose !== 'boot') return 'mode';
+    const mode = effectiveBootMode();
+    if (mode !== 'UNIVERSAL') return 'mode';
+    return null;
+  }
+
+  function refreshPersistenceAvailability() {
+    const block = document.getElementById('persistenceBlock');
+    const chk = document.getElementById('persistChk');
+    if (!block || !chk) return;
+    if (!(state.iso && state.iso.name)) { block.style.display = 'none'; return; }
+    block.style.display = 'block';
+    const blocker = persistenceBlocker();
+    chk.disabled = !!blocker;
+    if (blocker) chk.checked = false;
+    const label = chk.parentElement;
+    if (label) label.style.opacity = blocker ? '0.55' : '1';
+    onPersistenceChanged();
+  }
+
+  /**
+   * Shows exactly what persistence will do for this image: which family the
+   * initrd belongs to, the kernel arguments the generated GRUB menu will carry,
+   * and the /persistence.conf that gets written into the ext2 volume.
+   */
+  function renderPersistencePreview(on) {
+    const info = state.iso || {};
+    const compat = document.getElementById('persistCompat');
+    const preview = document.getElementById('persistPreview');
+    if (!compat || !preview) return;
+    if (!info.supportsPersistence) {
+      compat.textContent = info.name ? t('persist_incompatible') : '';
+      preview.style.display = 'none';
+      return;
+    }
+    if (persistenceBlocker() === 'mode') {
+      compat.textContent = t('persist_needs_universal', { mode: t('mode_universal_short') });
+      preview.style.display = 'none';
+      return;
+    }
+    const family = info.persistenceFamily === 'live' ? t('family_live') : t('family_casper');
+    compat.textContent = t('persist_compatible', { family: family, label: info.persistenceLabel || '' });
+    if (!on) { preview.style.display = 'none'; return; }
+    preview.style.display = 'block';
+    document.getElementById('persistArgs').textContent = t('kernel_args') + ' ' + (info.persistenceArgs || t('none_paren'));
+    document.getElementById('persistConf').textContent = info.persistenceConf
+      ? '/persistence.conf: ' + info.persistenceConf.trim()
+      : t('persist_conf_none');
+  }
+
+  /** Write-mode cards behave like a radio group over the hidden bootMode input. */
+  function selectBootMode(mode) {
+    document.getElementById('bootMode').value = mode;
+    document.querySelectorAll('#bootModeList .mode-card').forEach(card => {
+      card.classList.toggle('selected', card.dataset.mode === mode);
+    });
+    const tag = document.getElementById('modeAutoTag');
+    if (tag) {
+      const suggested = (state.iso && state.iso.suggestedMode) || '';
+      const shortKeys = {
+        universal: 'mode_universal_short',
+        windows: 'mode_windows_short',
+        raw: 'mode_raw_short',
+        uefi_copy: 'mode_uefi_copy_short',
+      };
+      const key = shortKeys[String(suggested).toLowerCase()];
+      tag.textContent = key
+        ? t('tag_picks', { mode: t(key) })
+        : t('tag_picked');
+    }
+    if (typeof onBootModeChanged === 'function') onBootModeChanged();
+  }
+
+  /** Live read/write position, so a stall or a failure names its exact LBA. */
+  function renderIoLine(io) {
+    const el = document.getElementById('ioLine');
+    if (!el) return;
+    if (!io) { el.textContent = ''; return; }
+    const parts = [];
+    if (io.write) parts.push(io.write);
+    if (io.read) parts.push(io.read);
+    if (io.verified) parts.push(io.verified);
+    el.innerHTML = escapeHtml(parts.join('  ·  ')) +
+      (io.failed ? ' <span class="bad">' + escapeHtml(io.failed) + '</span>' : '');
+  }
+
+  function renderChecks(targetId, result) {
+    const list = (result && result.checks) || [];
+    document.getElementById(targetId).innerHTML = list.map(c =>
+      '<div class="check-row"><span class="mark ' + ((c.ok || c.passed) ? 'ok' : 'bad') + '">' +
+      ((c.ok || c.passed) ? '✓' : '✕') + '</span><span class="txt">' + escapeHtml(I18N.tNative(c.name || '')) +
+      (c.detail ? '<small>' + escapeHtml(I18N.tNative(c.detail)) + '</small>' : '') + '</span></div>'
+    ).join('') || '<div style="font-size:12px;color:var(--text-muted);">' + t('no_checks') + '</div>';
+  }
+
+  function runPreflight() {
+    if (!window.Android || !Android.runPreflight) { alert(t('preflight_app_only')); return; }
+    document.getElementById('preflightCard').style.display = 'block';
+    document.getElementById('preflightSummary').textContent = t('running');
+    document.getElementById('preflightChecks').innerHTML = '';
+    Android.runPreflight(JSON.stringify({
+      deviceName: state.selectedDeviceName,
+      uri: state.iso ? state.iso.uri : '',
+      mode: document.getElementById('bootMode').value,
+      persistenceMB: persistenceEnabled()
+        ? parseInt(document.getElementById('persistSize').value || '0', 10) : 0
+    }));
+  }
+
+  function rerunVerification() {
+    if (!window.Android || !Android.rerunVerification) { alert(t('verify_app_only')); return; }
+    document.getElementById('reverifyCard').style.display = 'block';
+    document.getElementById('reverifySummary').textContent = t('rereading');
+    document.getElementById('reverifyChecks').innerHTML = '';
+    Android.rerunVerification(JSON.stringify({
+      deviceName: state.selectedDeviceName,
+      uri: state.iso ? state.iso.uri : '',
+      deep: true
+    }));
+  }
+
+  function onInspectProgress(kind, pct, detail) {
+    const id = kind === 'preflight' ? 'preflightSummary' : 'reverifySummary';
+    const el = document.getElementById(id);
+    if (el) el.textContent = pct + '% · ' + detail;
+  }
+
+  function onPreflightResult(result) {
+    document.getElementById('preflightCard').style.display = 'block';
+    document.getElementById('preflightSummary').textContent =
+      (result.ok ? '✓ ' : '✕ ') + (result.summary || '');
+    renderChecks('preflightChecks', result);
+  }
+
+  function onReverifyResult(result) {
+    document.getElementById('reverifyCard').style.display = 'block';
+    document.getElementById('reverifySummary').textContent =
+      (result.ok ? '✓ ' : '✕ ') + (result.summary || '');
+    renderChecks('reverifyChecks', result);
+  }
+
+  function exportReport() {
+    if (window.Android && Android.exportReport) Android.exportReport();
+  }
+
+  function saveLogFile() {
+    if (window.Android && Android.saveReportToFile) Android.saveReportToFile();
+    else alert(t('savelog_app_only'));
+  }
+
+  function showTechnicalLog() {
+    const report = (window.Android && Android.flashReport) ? Android.flashReport() : t('no_report');
+    showModal('\u2261', t('technical_log'), '', true);
+    document.getElementById('modalMessage').innerHTML = '<pre style="font-size:11px">' + escapeHtml(report) + '</pre>';
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn" onclick="saveLogFile()" style="border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);">' + t('save_to_file') + '</button>' +
+      '<button class="btn primary" onclick="closeModal()">' + t('done') + '</button>';
+  }
+
+  function escapeHtml(value) {
+    const div = document.createElement('div'); div.textContent = String(value || ''); return div.innerHTML;
+  }
+
+  function onFormatProgress(data) {
+    const status = I18N.tNative(data.status || '');
+    const details = I18N.tNative(data.details || '');
+    // progress is -1 when the Android side reports a failure: keep the bar where
+    // it is and hand the controls back instead of leaving the screen frozen.
+    if (data.progress >= 0) {
+      document.getElementById('progressFill').style.width = data.progress + '%';
+    }
+    document.getElementById('progressStatus').textContent = status + (details ? ": " + details : "");
+    renderIoLine(data.io);
+
+    if (data.progress < 0) {
+      document.getElementById('backBtn').disabled = false;
+      document.getElementById('wipeBtn').disabled = false;
+      document.getElementById('stopBtn').style.display = 'none';
+      document.getElementById('stopBtn').disabled = false;
+      document.getElementById('reverifyBtn').style.display = '';
+      renderErrorReport(data.error, status, details, data.diagnostics);
+      return;
+    }
+
+
+    if (data.progress === 100) {
+      document.getElementById('reverifyBtn').style.display = '';
+      showModal('✅', state.iso ? t('bootable_ready') : t('drive_wiped'),
+        state.iso
+          ? t('wrote_to', { iso: state.iso.name, drive: state.driveData.name })
+          : t('formatted_ok', { drive: state.driveData.name }));
+      document.getElementById('modalBtnRow').innerHTML = `
+        <button class="btn ghost" onclick="safelyRemove('${state.selectedDeviceName}'); closeModal();">${t('safely_remove')}</button>
+        <button class="btn primary" onclick="closeModal()">${t('done')}</button>
+      `;
+      document.getElementById('backBtn').disabled = false;
+      document.getElementById('wipeBtn').disabled = false;
+      document.getElementById('stopBtn').style.display = 'none';
+      document.getElementById('stopBtn').disabled = false;
+    }
+  }
+
+  // Detailed, localized failure report: failing step, error code, cause,
+  // suggested next actions and collapsible technical details.
+  function renderErrorReport(err, status, details, diagnostics) {
+    let e = err;
+    if (typeof e === 'string') { try { e = JSON.parse(e); } catch (_) { e = null; } }
+    const code = (e && e.code) || 'E-UNK-01';
+    const key = code.toLowerCase().replace(/-/g, '_');
+    const stage = (e && e.stage) ? t('stg_' + String(e.stage).toLowerCase()) : '';
+    const cause = t(key + '_msg');
+    const fix = t(key + '_fix');
+    const diag = Array.isArray(diagnostics) ? diagnostics.map(function (d) { return I18N.tNative(String(d)); }) : [];
+    const tech = [code, e && e.stage ? 'stage=' + e.stage : '', status, details,
+      e && e.technical ? e.technical : '',
+      diag.length ? t('err_diagnostics') + ':\n' + diag.join('\n') : ''].filter(Boolean).join('\n');
+
+    showModal('\u26a0', t('error_title'), '', true);
+    const box = document.getElementById('modalMessage');
+    const line = (label, value) =>
+      `<div style="margin:8px 0"><div style="font-size:12px;opacity:.65">${label}</div><div>${value}</div></div>`;
+    const actions = fix.split('\n').map(s => `<li>${s}</li>`).join('');
+    box.innerHTML =
+      (stage ? line(t('err_step'), stage) : '') +
+      line(t('err_code'), '<code>' + code + '</code>') +
+      line(t('err_cause'), cause) +
+      `<div style="margin:8px 0"><div style="font-size:12px;opacity:.65">${t('err_next')}</div>
+         <ul style="margin:4px 0 0 18px;padding:0">${actions}</ul></div>` +
+      (diag.length
+        ? `<div style="margin:8px 0"><div style="font-size:12px;opacity:.65">${t('err_diagnostics')}</div>
+             <ul style="margin:4px 0 0 18px;padding:0;font-size:13px">${diag.map(d => `<li>${d}</li>`).join('')}</ul></div>`
+        : '') +
+      `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;opacity:.65">${t('err_technical')}</summary>
+         <pre id="errTech" style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${tech}</pre></details>`;
+    document.getElementById('modalBtnRow').innerHTML =
+      `<button class="btn ghost" onclick="copyErrorReport()">${t('err_copy')}</button>
+       <button class="btn ghost" onclick="retryFlash()">${t('err_retry')}</button>
+       <button class="btn primary" onclick="closeModal()">${t('err_dismiss')}</button>`;
+  }
+
+  function retryFlash() {
+    closeModal();
+    document.getElementById('wipeInput').value = '';
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('formatProgress').style.display = 'none';
+    goToStep(2);
+  }
+
+  function copyErrorReport() {
+    const txt = document.getElementById('errTech').textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(txt);
+    showToast(t('err_copied'));
+  }
+
+
+  // ── Partition repair ─────────────────────────────────────────────────────
+  // Scans for partition-table / boot-sector damage and rebuilds it from the
+  // spare copies the drive already carries. Risky repairs (no spare copy on the
+  // disk) need an explicit confirmation because files can become unreachable.
+  let lastRepairScan = null;
+
+  function scanPartitions() {
+    if (!window.Android || !Android.scanPartitions) { alert(t('repair_app_only')); return; }
+    if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
+    document.getElementById('repairCard').style.display = 'block';
+    document.getElementById('repairSummary').textContent = t('repair_scanning');
+    document.getElementById('repairChecks').innerHTML = '';
+    document.getElementById('repairApplyBtn').style.display = 'none';
+    document.getElementById('repairRiskyBtn').style.display = 'none';
+    Android.scanPartitions(state.selectedDeviceName);
+  }
+
+  function repairPartitions(allowRisky) {
+    if (!window.Android || !Android.repairPartitions) { alert(t('repair_app_only')); return; }
+    document.getElementById('repairSummary').textContent = t('repair_running');
+    document.getElementById('repairApplyBtn').style.display = 'none';
+    document.getElementById('repairRiskyBtn').style.display = 'none';
+    Android.repairPartitions(state.selectedDeviceName, !!allowRisky);
+  }
+
+  function confirmRiskyRepair() {
+    showModal('\u26a0', t('repair_risky_title'), t('repair_risky_body'));
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn danger" onclick="closeModal(); repairPartitions(true);">' +
+      t('repair_risky_go') + '</button>';
+  }
+
+  function onRepairProgress(pct, detail) {
+    const el = document.getElementById('repairSummary');
+    if (el) el.textContent = pct + '% \u00b7 ' + I18N.tNative(detail || '');
+  }
+
+  function onRepairScan(result) { renderRepair(result, false); }
+  function onRepairResult(result) { renderRepair(result, true); }
+
+  function renderRepair(result, applied) {
+    lastRepairScan = result;
+    document.getElementById('repairCard').style.display = 'block';
+    document.getElementById('repairSummary').textContent =
+      (result.ok ? '\u2713 ' : '\u26a0 ') + I18N.tNative(result.summary || '');
+
+    const findings = Array.isArray(result.findings) ? result.findings : [];
+    document.getElementById('repairChecks').innerHTML = findings.map(function (f) {
+      const icon = f.applied ? '\u2713' : (f.severity === 'risky' ? '\u26a0' : (f.severity === 'info' ? '\u2139' : '\u2022'));
+      const colour = f.applied ? 'var(--ok, #2ea043)'
+        : (f.severity === 'risky' ? 'var(--danger)' : 'var(--text-muted)');
+      const tag = f.applied ? t('repair_tag_done')
+        : (f.severity === 'safe' ? t('repair_tag_safe')
+          : (f.severity === 'risky' ? t('repair_tag_risky') : ''));
+      return '<div class="check-line" style="display:flex;gap:8px;margin:6px 0;text-align:left">' +
+        '<span style="color:' + colour + '">' + icon + '</span>' +
+        '<span><strong>' + escapeHtml(I18N.tNative(f.title || '')) + '</strong>' +
+        (tag ? ' <em style="font-size:11px;opacity:.7">(' + tag + ')</em>' : '') +
+        '<br><small>' + escapeHtml(I18N.tNative(f.detail || '')) + '</small>' +
+        (f.error ? '<br><small style="color:var(--danger)">' + escapeHtml(I18N.tNative(f.error)) + '</small>' : '') +
+        '</span></div>';
+    }).join('') || '<div style="font-size:12px;color:var(--text-muted);">' + t('repair_none') + '</div>';
+
+    const pending = findings.filter(function (f) { return f.repairable && !f.applied; });
+    const safePending = pending.some(function (f) { return f.severity === 'safe'; });
+    const riskyPending = pending.some(function (f) { return f.severity === 'risky'; });
+    document.getElementById('repairApplyBtn').style.display = safePending ? '' : 'none';
+    document.getElementById('repairRiskyBtn').style.display = riskyPending ? '' : 'none';
+    if (applied) showToast(result.ok ? t('repair_done') : t('repair_partial'));
+  }
+
+  function showToast(m) {
+    const t = document.getElementById('toast');
+    t.textContent = m; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function showModal(icon, title, msg, report) {
+    document.getElementById('modalIcon').textContent = icon;
+    document.getElementById('modalTitle').textContent = title;
+    const box = document.getElementById('modalMessage');
+    box.textContent = msg;
+    // Reports are left-aligned prose; plain messages stay centred.
+    box.classList.toggle('report', !!report);
+    const modal = document.querySelector('#modal .modal');
+    if (modal) modal.scrollTop = 0;
+    document.getElementById('modal').classList.add('show');
+  }
+  // Closing the modal must leave the user where they were: after a flash the
+  // summary, the progress bar and the report button stay on screen.
+  function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+  // Apply the detected/saved language once the DOM is in place.
+  buildLangSelect();
+  applyLanguage();
+
+</script>
+</body>
+</html>

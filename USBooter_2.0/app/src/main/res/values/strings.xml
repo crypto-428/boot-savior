@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">USBooter</string>
+    <string name="drive_selection_title">Select USB Drive</string>
+    <string name="drive_selection_subtitle">Connect a USB drive via OTG cable</string>
+    <string name="no_root_warning">This device doesn\'t support USB Host mode (OTG), so it can\'t access USB drives</string>
+    <string name="no_drives">No USB drives detected</string>
+    <string name="refresh">Refresh</string>
+    <string name="partition_config_title">Partition Layout</string>
+    <string name="partition_config_subtitle">Choose a preset or customize</string>
+    <string name="preset_multiboot">Multiboot</string>
+    <string name="preset_windows">Windows</string>
+    <string name="preset_single_exfat">Single exFAT</string>
+    <string name="preset_single_ntfs">Single NTFS</string>
+    <string name="preset_linux">Linux ISOs</string>
+    <string name="add_partition">Add Partition</string>
+    <string name="continue_button">Continue</string>
+    <string name="confirm_title">Confirm Format</string>
+    <string name="type_wipe">Type WIPE to confirm</string>
+    <string name="wipe_drive">WIPE DRIVE</string>
+    <string name="cancel">Cancel</string>
+    <string name="formatting">Formatting Drive…</string>
+    <string name="partition_label_hint">Label (max 11 chars)</string>
+    <string name="partition_size_hint">Size in MB (minimum 10)</string>
+    <string name="fill_remaining">Fill remaining space</string>
+    <string name="filesystem">Filesystem</string>
+    <string name="esp_label">EFI System Partition (ESP)</string>
+    <string name="esp_hint">Only enable ESP for FAT32 partitions</string>
+    <string name="edit">Edit</string>
+    <string name="efi_chip">EFI</string>
+    <string name="hint_label">Label</string>
+    <string name="hint_size_mb">Size (MB)</string>
+    <string name="erase_warning_full">All data on this drive will be permanently erased. Type WIPE to confirm.</string>
+    <string name="partition_config_subtitle_colon">Choose a preset or customize:</string>
+    <string name="disk_map">Disk map — to scale</string>
+    <string name="filesystem_colon">Filesystem:</string>
+    <string name="partition_table_colon">Partition table:</string>
+    <string name="preparing">Preparing…</string>
+    <string name="preset_single_fat32">Single FAT32</string>
+    <string name="target_drive">Target Drive</string>
+    <string name="fill_remaining_note">This partition will use all remaining space</string>
+</resources>

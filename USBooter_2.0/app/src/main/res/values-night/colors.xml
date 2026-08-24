@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Blueprint (dark / cyanotype): white-cyan linework on deep Prussian-blue
+         paper - darker than the first pass, per feedback. -->
+    <color name="brand_primary">#FF9A5C</color>
+    <color name="brand_on_primary">#2A1000</color>
+    <color name="brand_primary_container">#5C2E0A</color>
+    <color name="brand_on_primary_container">#FFDBC2</color>
+
+    <color name="brand_secondary">#9DB6E8</color>
+    <color name="brand_on_secondary">#0A1A38</color>
+
+    <!-- Surfaces -->
+    <color name="surface">#0A1730</color>
+    <color name="on_surface">#EAF2FF</color>
+    <color name="surface_variant">#132247</color>
+    <color name="on_surface_variant">#9DB6E8</color>
+    <color name="background">#040B1D</color>
+    <color name="on_background">#EAF2FF</color>
+    <color name="outline">#33456E</color>
+
+    <!-- Error -->
+    <color name="error">#FF6B7A</color>
+    <color name="on_error">#3A0006</color>
+    <color name="error_container">#4A1620</color>
+    <color name="on_error_container">#FFB3BA</color>
+
+    <!-- Custom "caution" role -->
+    <color name="warning_container">#3A2308</color>
+    <color name="on_warning_container">#FFCDA3</color>
+</resources>

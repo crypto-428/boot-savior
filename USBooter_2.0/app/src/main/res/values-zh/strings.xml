@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">USBooter</string>
+    <string name="drive_selection_title">选择 U 盘</string>
+    <string name="drive_selection_subtitle">请通过 OTG 线连接 U 盘</string>
+    <string name="no_root_warning">此设备不支持 USB 主机模式（OTG），因此无法访问 U 盘</string>
+    <string name="no_drives">未检测到 U 盘</string>
+    <string name="refresh">刷新</string>
+    <string name="partition_config_title">分区布局</string>
+    <string name="partition_config_subtitle">选择预设或自定义</string>
+    <string name="preset_multiboot">多重启动</string>
+    <string name="preset_windows">Windows</string>
+    <string name="preset_single_exfat">单一 exFAT</string>
+    <string name="preset_single_ntfs">单一 NTFS</string>
+    <string name="preset_linux">Linux ISO</string>
+    <string name="add_partition">添加分区</string>
+    <string name="continue_button">继续</string>
+    <string name="confirm_title">确认格式化</string>
+    <string name="type_wipe">输入 WIPE 以确认</string>
+    <string name="wipe_drive">清空 U 盘</string>
+    <string name="cancel">取消</string>
+    <string name="formatting">正在格式化 U 盘…</string>
+    <string name="partition_label_hint">卷标（最多 11 个字符）</string>
+    <string name="partition_size_hint">大小（MB，最小 10）</string>
+    <string name="fill_remaining">填满剩余空间</string>
+    <string name="filesystem">文件系统</string>
+    <string name="esp_label">EFI 系统分区（ESP）</string>
+    <string name="esp_hint">仅对 FAT32 分区启用 ESP</string>
+    <string name="edit">编辑</string>
+    <string name="efi_chip">EFI</string>
+    <string name="hint_label">卷标</string>
+    <string name="hint_size_mb">大小（MB）</string>
+    <string name="erase_warning_full">此 U 盘上的所有数据将被永久删除。请输入 WIPE 以确认。</string>
+    <string name="partition_config_subtitle_colon">选择预设或自定义：</string>
+    <string name="disk_map">磁盘布局图 — 按比例</string>
+    <string name="filesystem_colon">文件系统：</string>
+    <string name="partition_table_colon">分区表：</string>
+    <string name="preparing">正在准备…</string>
+    <string name="preset_single_fat32">单一 FAT32</string>
+    <string name="target_drive">目标 U 盘</string>
+    <string name="fill_remaining_note">此分区将使用所有剩余空间</string>
+</resources>

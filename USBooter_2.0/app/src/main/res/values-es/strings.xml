@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">USBooter</string>
+    <string name="drive_selection_title">Selecciona la unidad USB</string>
+    <string name="drive_selection_subtitle">Conecta una unidad USB con un cable OTG</string>
+    <string name="no_root_warning">Este dispositivo no admite el modo USB Host (OTG), por lo que no puede acceder a unidades USB</string>
+    <string name="no_drives">No se ha detectado ninguna unidad USB</string>
+    <string name="refresh">Actualizar</string>
+    <string name="partition_config_title">Esquema de particiones</string>
+    <string name="partition_config_subtitle">Elige un preajuste o personalízalo</string>
+    <string name="preset_multiboot">Multiarranque</string>
+    <string name="preset_windows">Windows</string>
+    <string name="preset_single_exfat">exFAT única</string>
+    <string name="preset_single_ntfs">NTFS única</string>
+    <string name="preset_linux">ISO de Linux</string>
+    <string name="add_partition">Añadir partición</string>
+    <string name="continue_button">Continuar</string>
+    <string name="confirm_title">Confirmar el formateo</string>
+    <string name="type_wipe">Escribe WIPE para confirmar</string>
+    <string name="wipe_drive">BORRAR UNIDAD</string>
+    <string name="cancel">Cancelar</string>
+    <string name="formatting">Formateando la unidad…</string>
+    <string name="partition_label_hint">Etiqueta (máx. 11 caracteres)</string>
+    <string name="partition_size_hint">Tamaño en MB (mínimo 10)</string>
+    <string name="fill_remaining">Ocupar el espacio restante</string>
+    <string name="filesystem">Sistema de archivos</string>
+    <string name="esp_label">Partición del sistema EFI (ESP)</string>
+    <string name="esp_hint">Activa ESP solo para particiones FAT32</string>
+    <string name="edit">Editar</string>
+    <string name="efi_chip">EFI</string>
+    <string name="hint_label">Etiqueta</string>
+    <string name="hint_size_mb">Tamaño (MB)</string>
+    <string name="erase_warning_full">Todos los datos de esta unidad se borrarán de forma permanente. Escribe WIPE para confirmar.</string>
+    <string name="partition_config_subtitle_colon">Elige un preajuste o personalízalo:</string>
+    <string name="disk_map">Mapa del disco — a escala</string>
+    <string name="filesystem_colon">Sistema de archivos:</string>
+    <string name="partition_table_colon">Tabla de particiones:</string>
+    <string name="preparing">Preparando…</string>
+    <string name="preset_single_fat32">FAT32 única</string>
+    <string name="target_drive">Unidad de destino</string>
+    <string name="fill_remaining_note">Esta partición ocupará todo el espacio restante</string>
+</resources>

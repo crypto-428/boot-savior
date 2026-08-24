@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.USBooter" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorOnPrimary">@color/brand_on_primary</item>
+        <item name="colorPrimaryContainer">@color/brand_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/brand_on_primary_container</item>
+
+        <item name="colorSecondary">@color/brand_secondary</item>
+        <item name="colorOnSecondary">@color/brand_on_secondary</item>
+
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorOnBackground">@color/on_background</item>
+        <item name="colorOutline">@color/outline</item>
+
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/on_error</item>
+        <item name="colorErrorContainer">@color/error_container</item>
+        <item name="colorOnErrorContainer">@color/on_error_container</item>
+
+        <item name="materialCardViewStyle">@style/Widget.USBooter.Card</item>
+    </style>
+
+    <style name="Widget.USBooter.Card" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardCornerRadius">10dp</item>
+        <item name="strokeWidth">1.5dp</item>
+        <item name="strokeColor">?attr/colorOutline</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <style name="TextAppearance.USBooter.ToolbarTitle" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.1</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+</resources>
