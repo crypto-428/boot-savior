@@ -2378,12 +2378,17 @@
         '</span></div>';
     }).join('') || '<div style="font-size:12px;color:var(--text-muted);">' + t('repair_none') + '</div>';
 
+    setRepairBusy(false);
     const pending = findings.filter(function (f) { return f.repairable && !f.applied; });
     const safePending = pending.some(function (f) { return f.severity === 'safe'; });
     const riskyPending = pending.some(function (f) { return f.severity === 'risky'; });
     document.getElementById('repairApplyBtn').style.display = safePending ? '' : 'none';
     document.getElementById('repairRiskyBtn').style.display = riskyPending ? '' : 'none';
-    if (applied) showToast(result.ok ? t('repair_done') : t('repair_partial'));
+    if (applied) {
+      showToast(result.ok ? t('repair_done') : t('repair_partial'));
+      // Re-read the drive so the findings reflect the disk as it is now.
+      setTimeout(scanPartitions, 900);
+    }
   }
 
   function showToast(m) {
