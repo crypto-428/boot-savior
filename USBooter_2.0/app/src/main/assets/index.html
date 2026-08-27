@@ -1592,13 +1592,26 @@
     state.currentStep = step;
     document.querySelectorAll('.screen-content').forEach(el => el.classList.remove('active'));
     document.getElementById('step' + step).classList.add('active');
-    document.querySelectorAll('.step-dot').forEach((dot, i) => {
-      dot.classList.remove('active', 'done');
-      if (i + 1 === step) dot.classList.add('active');
-      else if (i + 1 < step) dot.classList.add('done');
-    });
+    if (step <= 3) {
+      document.querySelectorAll('.step-dot').forEach((dot, i) => {
+        dot.classList.remove('active', 'done');
+        if (i + 1 === step) dot.classList.add('active');
+        else if (i + 1 < step) dot.classList.add('done');
+      });
+    }
     if (step === 3) updateConfirmation();
     if (step === 2) updatePartitionMap();
+  }
+
+  // Standalone repair screen: reachable straight from the drive list, so a
+  // damaged stick can be checked and fixed without ever formatting it.
+  function openRepair() {
+    if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
+    const el = document.getElementById('repairDrive');
+    if (el) el.textContent = state.selectedDrive ? (state.selectedDrive.name || state.selectedDeviceName) : state.selectedDeviceName;
+    document.getElementById('repairCard').style.display = 'none';
+    document.getElementById('repairChecks').innerHTML = '';
+    goToStep(4);
   }
 
   // ── Android Bridges ──
