@@ -1608,7 +1608,8 @@
   function openRepair() {
     if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
     const el = document.getElementById('repairDrive');
-    if (el) el.textContent = state.selectedDrive ? (state.selectedDrive.name || state.selectedDeviceName) : state.selectedDeviceName;
+    const d = state.driveData;
+    if (el) el.textContent = d ? ((d.name || state.selectedDeviceName) + (d.size ? ' \u00b7 ' + d.size : '')) : state.selectedDeviceName;
     document.getElementById('repairCard').style.display = 'none';
     document.getElementById('repairChecks').innerHTML = '';
     goToStep(4);
