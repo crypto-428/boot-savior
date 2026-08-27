@@ -1037,6 +1037,8 @@
         </div>
       </div>
 
+      <button class="btn" id="openRepairBtn" onclick="openRepair()" style="width:100%;margin-top:4px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_open">🛠 Repair partitions (without formatting)</button>
+
       <div class="btnrow">
         <button class="btn ghost" onclick="rescanDrives()" data-i18n="rescan">⟳ Rescan</button>
         <button class="btn primary" id="nextToStep2" onclick="goToStep(2)" disabled data-i18n="next">Next →</button>
@@ -1337,17 +1339,10 @@
           <div id="reverifyChecks" style="margin-top:6px;"></div>
         </div>
 
-        <div class="info-card" id="repairCard" style="display:none;margin-top:12px;">
-          <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="repair_title">Partition repair</div>
-          <div id="repairSummary" style="font-size:12px;color:var(--text-muted);"></div>
-          <div id="repairChecks" style="margin-top:6px;"></div>
-          <button class="btn" id="repairApplyBtn" onclick="repairPartitions(false)" style="display:none;width:100%;margin-top:10px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_apply">Repair without losing files</button>
-          <button class="btn danger" id="repairRiskyBtn" onclick="confirmRiskyRepair()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_risky">Repair anyway (files may be lost)</button>
-        </div>
 
         <button class="btn" id="preflightBtn" onclick="runPreflight()" style="width:100%;margin-top:12px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="run_preflight">Run preflight self-test</button>
         <button class="btn" id="reverifyBtn" onclick="rerunVerification()" style="display:none;width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="rerun_verify">Re-run verification (no reflash)</button>
-        <button class="btn" id="repairScanBtn" onclick="scanPartitions()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_scan">Check &amp; repair partitions (no data loss)</button>
+        <button class="btn" id="repairScanBtn" onclick="openRepair()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_open">🛠 Repair partitions (without formatting)</button>
         <button class="btn" id="exportReportBtn" onclick="exportReport()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="export_report">Export verification report</button>
         <button class="btn" onclick="showTechnicalLog()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="view_log">View technical log</button>
         <button class="btn" onclick="saveLogFile()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="save_log">Save detailed log to file</button>
@@ -1359,6 +1354,36 @@
         <button class="btn danger" id="wipeBtn" onclick="confirmWipe()" disabled data-i18n="wipe_drive">Wipe Drive</button>
         <button class="btn danger" id="stopBtn" onclick="cancelFlash()" style="display:none;" data-i18n="stop_flash">■ Stop</button>
 
+      </div>
+    </div>
+
+    <!-- ═══ SCREEN 4: STANDALONE PARTITION REPAIR ═══ -->
+    <div class="screen-content" id="step4">
+      <div class="label" data-i18n="repair_screen_title">Repair partitions</div>
+
+      <div class="scroll-content">
+        <div class="info-card">
+          <div class="row"><span class="k" data-i18n="drive">Drive</span><span class="v" id="repairDrive">...</span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:left;" data-i18n="repair_intro">
+            This checks the partition table and the filesystem headers without writing anything. Repairs that can be made from a spare copy already on the drive keep every file; repairs without a spare copy are marked and need your confirmation.
+          </div>
+        </div>
+
+        <div class="info-card" id="repairCard" style="display:none;margin-top:12px;">
+          <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="repair_title">Partition repair</div>
+          <div id="repairSummary" style="font-size:12px;color:var(--text-muted);"></div>
+          <div id="repairChecks" style="margin-top:6px;"></div>
+          <button class="btn" id="repairApplyBtn" onclick="repairPartitions(false)" style="display:none;width:100%;margin-top:10px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_apply">Repair without losing files</button>
+          <button class="btn danger" id="repairRiskyBtn" onclick="confirmRiskyRepair()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_risky">Repair anyway (files may be lost)</button>
+        </div>
+
+        <button class="btn primary" id="repairStartBtn" onclick="scanPartitions()" style="width:100%;margin-top:12px;" data-i18n="repair_scan">Check &amp; repair partitions (no data loss)</button>
+        <button class="btn" onclick="exportReport()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="export_report">Export verification report</button>
+      </div>
+
+      <div class="btnrow" style="flex-wrap:wrap;">
+        <button class="btn back" onclick="goToStep(1)" data-i18n="back">← Back</button>
+        <button class="btn ghost" onclick="safelyRemove(state.selectedDeviceName)" data-i18n="eject">⏏ Eject</button>
       </div>
     </div>
   </div>
@@ -1567,13 +1592,27 @@
     state.currentStep = step;
     document.querySelectorAll('.screen-content').forEach(el => el.classList.remove('active'));
     document.getElementById('step' + step).classList.add('active');
-    document.querySelectorAll('.step-dot').forEach((dot, i) => {
-      dot.classList.remove('active', 'done');
-      if (i + 1 === step) dot.classList.add('active');
-      else if (i + 1 < step) dot.classList.add('done');
-    });
+    if (step <= 3) {
+      document.querySelectorAll('.step-dot').forEach((dot, i) => {
+        dot.classList.remove('active', 'done');
+        if (i + 1 === step) dot.classList.add('active');
+        else if (i + 1 < step) dot.classList.add('done');
+      });
+    }
     if (step === 3) updateConfirmation();
     if (step === 2) updatePartitionMap();
+  }
+
+  // Standalone repair screen: reachable straight from the drive list, so a
+  // damaged stick can be checked and fixed without ever formatting it.
+  function openRepair() {
+    if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
+    const el = document.getElementById('repairDrive');
+    const d = state.driveData;
+    if (el) el.textContent = d ? ((d.name || state.selectedDeviceName) + (d.size ? ' \u00b7 ' + d.size : '')) : state.selectedDeviceName;
+    document.getElementById('repairCard').style.display = 'none';
+    document.getElementById('repairChecks').innerHTML = '';
+    goToStep(4);
   }
 
   // ── Android Bridges ──
@@ -2271,22 +2310,32 @@
   // disk) need an explicit confirmation because files can become unreachable.
   let lastRepairScan = null;
 
+  let repairBusy = false;
+
+  function setRepairBusy(busy) {
+    repairBusy = busy;
+    const start = document.getElementById('repairStartBtn');
+    if (start) { start.disabled = busy; start.textContent = busy ? t('repair_busy') : t('repair_scan'); }
+    document.getElementById('repairApplyBtn').style.display = 'none';
+    document.getElementById('repairRiskyBtn').style.display = 'none';
+  }
+
   function scanPartitions() {
     if (!window.Android || !Android.scanPartitions) { alert(t('repair_app_only')); return; }
     if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
+    if (repairBusy) return;
     document.getElementById('repairCard').style.display = 'block';
     document.getElementById('repairSummary').textContent = t('repair_scanning');
     document.getElementById('repairChecks').innerHTML = '';
-    document.getElementById('repairApplyBtn').style.display = 'none';
-    document.getElementById('repairRiskyBtn').style.display = 'none';
+    setRepairBusy(true);
     Android.scanPartitions(state.selectedDeviceName);
   }
 
   function repairPartitions(allowRisky) {
     if (!window.Android || !Android.repairPartitions) { alert(t('repair_app_only')); return; }
+    if (repairBusy) return;
     document.getElementById('repairSummary').textContent = t('repair_running');
-    document.getElementById('repairApplyBtn').style.display = 'none';
-    document.getElementById('repairRiskyBtn').style.display = 'none';
+    setRepairBusy(true);
     Android.repairPartitions(state.selectedDeviceName, !!allowRisky);
   }
 
@@ -2329,12 +2378,17 @@
         '</span></div>';
     }).join('') || '<div style="font-size:12px;color:var(--text-muted);">' + t('repair_none') + '</div>';
 
+    setRepairBusy(false);
     const pending = findings.filter(function (f) { return f.repairable && !f.applied; });
     const safePending = pending.some(function (f) { return f.severity === 'safe'; });
     const riskyPending = pending.some(function (f) { return f.severity === 'risky'; });
     document.getElementById('repairApplyBtn').style.display = safePending ? '' : 'none';
     document.getElementById('repairRiskyBtn').style.display = riskyPending ? '' : 'none';
-    if (applied) showToast(result.ok ? t('repair_done') : t('repair_partial'));
+    if (applied) {
+      showToast(result.ok ? t('repair_done') : t('repair_partial'));
+      // Re-read the drive so the findings reflect the disk as it is now.
+      setTimeout(scanPartitions, 900);
+    }
   }
 
   function showToast(m) {

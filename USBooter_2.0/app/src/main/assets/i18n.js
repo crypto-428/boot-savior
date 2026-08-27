@@ -266,6 +266,10 @@
       repair_risky_body: 'The drive carries no spare copy of this structure, so it has to be rebuilt by guessing. Some files may become unreachable. Copy anything you still need off the drive first.',
       repair_risky_go: 'Repair anyway',
       repair_cancel: 'Cancel',
+      repair_open: '🛠 Repair partitions (without formatting)',
+      repair_screen_title: 'Repair partitions',
+      repair_intro: 'This checks the partition table and the filesystem headers without writing anything. Repairs that can be made from a spare copy already on the drive keep every file; repairs without a spare copy are marked and need your confirmation.',
+      repair_busy: 'Working on the drive...',
       n_error_prefix: 'Error:'
     },
 
@@ -526,6 +530,10 @@
       repair_risky_body: 'L\'unità non contiene una copia di riserva di questa struttura, quindi va ricostruita per tentativi. Alcuni file potrebbero diventare irraggiungibili. Copia prima altrove i file che ti servono.',
       repair_risky_go: 'Ripara comunque',
       repair_cancel: 'Annulla',
+      repair_open: '🛠 Ripara le partizioni (senza formattare)',
+      repair_screen_title: 'Ripara le partizioni',
+      repair_intro: 'Controlla la tabella delle partizioni e le intestazioni dei filesystem senza scrivere nulla. Le riparazioni che si possono fare da una copia di riserva già presente sull\'unità conservano tutti i file; quelle senza copia di riserva sono segnalate e richiedono la tua conferma.',
+      repair_busy: 'Operazione sull\'unità in corso...',
       n_error_prefix: 'Errore:'
     },
 
@@ -786,6 +794,10 @@
       repair_risky_body: 'La unidad no tiene una copia de reserva de esta estructura, así que hay que reconstruirla adivinando. Algunos archivos podrían quedar inaccesibles. Copia antes lo que necesites.',
       repair_risky_go: 'Reparar de todos modos',
       repair_cancel: 'Cancelar',
+      repair_open: '🛠 Reparar particiones (sin formatear)',
+      repair_screen_title: 'Reparar particiones',
+      repair_intro: 'Comprueba la tabla de particiones y las cabeceras de los sistemas de archivos sin escribir nada. Las reparaciones que pueden hacerse desde una copia de reserva ya presente en la unidad conservan todos los archivos; las que no tienen copia se marcan y necesitan tu confirmación.',
+      repair_busy: 'Trabajando en la unidad...',
       n_error_prefix: 'Error:'
     },
 
@@ -1046,6 +1058,10 @@
       repair_risky_body: 'A unidade não tem uma cópia de reserva desta estrutura, por isso terá de ser reconstruída por tentativa. Alguns ficheiros podem ficar inacessíveis. Copie primeiro o que precisa.',
       repair_risky_go: 'Reparar mesmo assim',
       repair_cancel: 'Cancelar',
+      repair_open: '🛠 Reparar partições (sem formatar)',
+      repair_screen_title: 'Reparar partições',
+      repair_intro: 'Verifica a tabela de partições e os cabeçalhos dos sistemas de ficheiros sem escrever nada. As reparações que podem ser feitas a partir de uma cópia de reserva já presente na unidade preservam todos os ficheiros; as que não têm cópia são assinaladas e precisam da sua confirmação.',
+      repair_busy: 'A trabalhar na unidade...',
       n_error_prefix: 'Erro:'
     },
 
@@ -1306,6 +1322,10 @@
       repair_risky_body: '该驱动器没有此结构的备份副本，只能靠推断重建，部分文件可能无法访问。请先备份需要的文件。',
       repair_risky_go: '仍然修复',
       repair_cancel: '取消',
+      repair_open: '🛠 修复分区（无需格式化）',
+      repair_screen_title: '修复分区',
+      repair_intro: '此操作只读取分区表和文件系统头，不写入任何数据。可以从驱动器上已有的备份副本完成的修复不会丢失任何文件；没有备份副本的修复会被标记，需要你确认。',
+      repair_busy: '正在处理驱动器…',
       n_error_prefix: '\u9519\u8bef\uff1a'
     }
   };
