@@ -2310,22 +2310,32 @@
   // disk) need an explicit confirmation because files can become unreachable.
   let lastRepairScan = null;
 
+  let repairBusy = false;
+
+  function setRepairBusy(busy) {
+    repairBusy = busy;
+    const start = document.getElementById('repairStartBtn');
+    if (start) { start.disabled = busy; start.textContent = busy ? t('repair_busy') : t('repair_scan'); }
+    document.getElementById('repairApplyBtn').style.display = 'none';
+    document.getElementById('repairRiskyBtn').style.display = 'none';
+  }
+
   function scanPartitions() {
     if (!window.Android || !Android.scanPartitions) { alert(t('repair_app_only')); return; }
     if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
+    if (repairBusy) return;
     document.getElementById('repairCard').style.display = 'block';
     document.getElementById('repairSummary').textContent = t('repair_scanning');
     document.getElementById('repairChecks').innerHTML = '';
-    document.getElementById('repairApplyBtn').style.display = 'none';
-    document.getElementById('repairRiskyBtn').style.display = 'none';
+    setRepairBusy(true);
     Android.scanPartitions(state.selectedDeviceName);
   }
 
   function repairPartitions(allowRisky) {
     if (!window.Android || !Android.repairPartitions) { alert(t('repair_app_only')); return; }
+    if (repairBusy) return;
     document.getElementById('repairSummary').textContent = t('repair_running');
-    document.getElementById('repairApplyBtn').style.display = 'none';
-    document.getElementById('repairRiskyBtn').style.display = 'none';
+    setRepairBusy(true);
     Android.repairPartitions(state.selectedDeviceName, !!allowRisky);
   }
 
