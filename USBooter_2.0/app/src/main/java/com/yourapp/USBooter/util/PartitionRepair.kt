@@ -545,7 +545,7 @@ object PartitionRepair {
         val reserved = le16(boot, 14)
         val fatCount = boot[16].toInt() and 0xFF
         val fatSectors = le32(boot, 36)
-        if (fatCount >= 2 && fatSectors in 1..(1 shl 22)) {
+        if (fatCount >= 2 && fatSectors in 1L..(1L shl 22)) {
             val chunk = minOf(fatSectors, 64L).toInt()
             val a = runCatching { device.readBlocks(part.start + reserved, chunk) }.getOrNull()
             val b = runCatching { device.readBlocks(part.start + reserved + fatSectors, chunk) }.getOrNull()
