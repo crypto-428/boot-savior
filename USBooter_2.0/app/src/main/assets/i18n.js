@@ -1396,6 +1396,23 @@
       { it: 'La somma di controllo che protegge la regione di avvio exFAT della partizione {1} non corrisponde al contenuto, quindi Windows potrebbe rifiutarsi di montare la partizione. Ricalcolarla lascia tutti i file intatti.', es: 'La suma de comprobación que protege la región de arranque exFAT de la partición {1} no coincide con su contenido, por lo que Windows puede negarse a montar la partición. Recalcularla deja todos los archivos intactos.', pt: 'A soma de verificação que protege a região de arranque exFAT da partição {1} não corresponde ao conteúdo, pelo que o Windows pode recusar montar a partição. Recalculá-la deixa todos os ficheiros intactos.', zh: '保护分区 {1} 的 exFAT 引导区校验和与内容不符，Windows 可能拒绝挂载该分区。重新计算校验和不会改动任何文件。' }],
     [/^Partition (\d+) starts correctly but the NTFS boot-sector copy at the end of the partition is damaged\. Restoring the copy from the working sector is a structural fix and no file is rewritten\.$/,
       { it: 'La partizione {1} inizia correttamente, ma la copia del settore di avvio NTFS alla fine della partizione è danneggiata. Ripristinare la copia dal settore in uso è una correzione strutturale e nessun file viene riscritto.', es: 'La partición {1} comienza correctamente, pero la copia del sector de arranque NTFS al final de la partición está dañada. Restaurar la copia desde el sector en uso es una corrección estructural y ningún archivo se reescribe.', pt: 'A partição {1} começa corretamente, mas a cópia do setor de arranque NTFS no fim da partição está danificada. Restaurar a cópia a partir do setor em uso é uma correção estrutural e nenhum ficheiro é reescrito.', zh: '分区 {1} 开头正常，但分区末尾的 NTFS 引导扇区副本已损坏。用工作扇区恢复该副本属结构性修复，不重写任何文件。' }],
+    [/^Partition (\d+): NTFS boot sector is inconsistent$/,
+      { it: 'Partizione {1}: settore di avvio NTFS incoerente', es: 'Partición {1}: sector de arranque NTFS incoherente', pt: 'Partição {1}: setor de arranque NTFS incoerente', zh: '分区 {1}：NTFS 引导扇区内容不一致' }],
+    [/^Partition (\d+): NTFS boot sector must be recomputed$/,
+      { it: 'Partizione {1}: il settore di avvio NTFS va ricalcolato', es: 'Partición {1}: el sector de arranque NTFS debe recalcularse', pt: 'Partição {1}: o setor de arranque NTFS tem de ser recalculado', zh: '分区 {1}：需要重新计算 NTFS 引导扇区' }],
+    [/^Partition (\d+): NTFS structures are too damaged to repair$/,
+      { it: 'Partizione {1}: strutture NTFS troppo danneggiate per essere riparate', es: 'Partición {1}: las estructuras NTFS están demasiado dañadas para repararlas', pt: 'Partição {1}: as estruturas NTFS estão demasiado danificadas para reparar', zh: '分区 {1}：NTFS 结构损坏过重，无法修复' }],
+    [/^Partition (\d+): master file table is unreadable$/,
+      { it: 'Partizione {1}: tabella dei file principale illeggibile', es: 'Partición {1}: la tabla maestra de archivos no se puede leer', pt: 'Partição {1}: a tabela mestra de ficheiros não é legível', zh: '分区 {1}：主文件表无法读取' }],
+    [/^The NTFS boot sector of partition (\d+) is present but its contents are wrong \(([\s\S]+?)\), which is why the drive is reported as not formatted\. The copy NTFS keeps in the last sector of the partition is intact, so it can be put back with no file loss\.$/,
+      { it: 'Il settore di avvio NTFS della partizione {1} è presente ma il suo contenuto è errato ({2}): è per questo che l\u2019unità viene segnalata come non formattata. La copia che NTFS conserva nell\u2019ultimo settore della partizione è integra, quindi può essere ripristinata senza perdere file.', es: 'El sector de arranque NTFS de la partición {1} está presente pero su contenido es incorrecto ({2}), y por eso la unidad se indica como no formateada. La copia que NTFS guarda en el último sector de la partición está intacta, así que puede restaurarse sin perder archivos.', pt: 'O setor de arranque NTFS da partição {1} existe mas o seu conteúdo está errado ({2}), e é por isso que a unidade é indicada como não formatada. A cópia que o NTFS guarda no último setor da partição está intacta, pelo que pode ser reposta sem perder ficheiros.', zh: '分区 {1} 的 NTFS 引导扇区存在，但内容有误（{2}），这正是驱动器被报告为未格式化的原因。NTFS 保存在分区最后一个扇区的副本完好，可以直接恢复且不丢失文件。' }],
+    [/^Both the NTFS boot sector of partition (\d+) and its backup copy are wrong \(([\s\S]+?)\), and the master file table was still found on the drive\. The boot sector can be recomputed from the partition size and the file table that was found\. Only the boot sector is rewritten, but because no healthy copy is left this is a best-effort repair: copy anything you can still read off the drive first\.$/,
+      { it: 'Sia il settore di avvio NTFS della partizione {1} sia la sua copia di riserva sono errati ({2}), ma la tabella dei file principale è stata comunque trovata sull\u2019unità. Il settore di avvio può essere ricalcolato dalla dimensione della partizione e dalla tabella trovata. Viene riscritto solo il settore di avvio, ma poiché non resta alcuna copia integra si tratta di una riparazione al meglio possibile: copia prima tutto ciò che riesci ancora a leggere.', es: 'Tanto el sector de arranque NTFS de la partición {1} como su copia de respaldo son incorrectos ({2}), pero la tabla maestra de archivos sí se encontró en la unidad. El sector de arranque puede recalcularse a partir del tamaño de la partición y de la tabla encontrada. Solo se reescribe el sector de arranque, pero como no queda ninguna copia sana es una reparación de mejor esfuerzo: copia antes todo lo que aún puedas leer.', pt: 'Tanto o setor de arranque NTFS da partição {1} como a sua cópia de reserva estão errados ({2}), mas a tabela mestra de ficheiros foi encontrada na unidade. O setor de arranque pode ser recalculado a partir do tamanho da partição e da tabela encontrada. Só o setor de arranque é reescrito, mas como não resta nenhuma cópia saudável esta é uma reparação com o melhor esforço possível: copie primeiro tudo o que ainda conseguir ler.', zh: '分区 {1} 的 NTFS 引导扇区及其备份副本均有误（{2}），但驱动器上仍找到了主文件表。可以根据分区大小和找到的文件表重新计算引导扇区。仅重写引导扇区，但由于没有完好副本，这属于尽力而为的修复：请先把仍能读取的内容复制出来。' }],
+    [/^The NTFS boot sector of partition (\d+) is wrong \(([\s\S]+?)\), its backup copy is unusable and no master file table could be found on the drive\. Nothing here can be rebuilt without guessing: recover the files you need with a recovery tool, then reformat\.$/,
+      { it: 'Il settore di avvio NTFS della partizione {1} è errato ({2}), la copia di riserva è inutilizzabile e sull\u2019unità non è stata trovata alcuna tabella dei file principale. Qui non si può ricostruire nulla senza tirare a indovinare: recupera i file che ti servono con uno strumento di recupero, poi riformatta.', es: 'El sector de arranque NTFS de la partición {1} es incorrecto ({2}), su copia de respaldo es inservible y no se encontró ninguna tabla maestra de archivos en la unidad. Aquí no se puede reconstruir nada sin adivinar: recupera los archivos que necesites con una herramienta de recuperación y luego reformatea.', pt: 'O setor de arranque NTFS da partição {1} está errado ({2}), a sua cópia de reserva é inutilizável e não foi encontrada nenhuma tabela mestra de ficheiros na unidade. Aqui nada pode ser reconstruído sem adivinhar: recupere os ficheiros de que precisa com uma ferramenta de recuperação e depois reformate.', zh: '分区 {1} 的 NTFS 引导扇区有误（{2}），其备份副本不可用，且驱动器上未找到主文件表。若不猜测便无法重建任何结构：请先用恢复工具取回所需文件，然后重新格式化。' }],
+    [/^The NTFS boot sector of partition (\d+) is healthy but the master file table it points at does not start with a valid record\. The list of files can only be rebuilt by scanning the whole partition, which cannot be done without risking file loss\. Recover the files you need before reformatting\.$/,
+      { it: 'Il settore di avvio NTFS della partizione {1} è integro, ma la tabella dei file principale a cui punta non inizia con un record valido. L\u2019elenco dei file può essere ricostruito solo analizzando l\u2019intera partizione, cosa impossibile senza rischiare la perdita di file. Recupera i file che ti servono prima di riformattare.', es: 'El sector de arranque NTFS de la partición {1} está sano, pero la tabla maestra de archivos a la que apunta no empieza con un registro válido. La lista de archivos solo puede reconstruirse analizando toda la partición, algo que no puede hacerse sin riesgo de perder archivos. Recupera los archivos que necesites antes de reformatear.', pt: 'O setor de arranque NTFS da partição {1} está saudável, mas a tabela mestra de ficheiros para que aponta não começa com um registo válido. A lista de ficheiros só pode ser reconstruída analisando toda a partição, o que não é possível sem risco de perder ficheiros. Recupere os ficheiros de que precisa antes de reformatar.', zh: '分区 {1} 的 NTFS 引导扇区正常，但它指向的主文件表开头不是有效记录。文件列表只能通过扫描整个分区来重建，而这必然带来文件丢失风险。请在重新格式化前先取回所需文件。' }],
+
 
     // ── Preflight and verification prose ──────────────────────────────────
     [/^The app assets are not available$/,
@@ -1952,6 +1969,27 @@
     return tNativeBase(text);
   }
 
+  /** Short engine fragments that appear inside longer messages as a list. */
+  var NATIVE_PHRASES = {
+    'the sector could not be read': { it: 'il settore non è leggibile', es: 'el sector no se pudo leer', pt: 'o setor não foi legível', zh: '扇区无法读取' },
+    'the end-of-sector marker is missing': { it: 'manca il marcatore di fine settore', es: 'falta la marca de fin de sector', pt: 'falta a marca de fim de setor', zh: '缺少扇区结束标记' },
+    'the sector size is invalid': { it: 'la dimensione del settore non è valida', es: 'el tamaño de sector no es válido', pt: 'o tamanho do setor não é válido', zh: '扇区大小无效' },
+    'the cluster size is invalid': { it: 'la dimensione del cluster non è valida', es: 'el tamaño de clúster no es válido', pt: 'o tamanho do cluster não é válido', zh: '簇大小无效' },
+    'the recorded partition size does not match the real one': { it: 'la dimensione registrata della partizione non corrisponde a quella reale', es: 'el tamaño registrado de la partición no coincide con el real', pt: 'o tamanho registado da partição não corresponde ao real', zh: '记录的分区大小与实际不符' },
+    'the file-table position is out of range': { it: 'la posizione della tabella dei file è fuori intervallo', es: 'la posición de la tabla de archivos está fuera de rango', pt: 'a posição da tabela de ficheiros está fora do intervalo', zh: '文件表位置超出范围' },
+    'the mirror file-table position is out of range': { it: 'la posizione della tabella dei file speculare è fuori intervallo', es: 'la posición de la tabla de archivos espejo está fuera de rango', pt: 'a posição da tabela de ficheiros espelho está fora do intervalo', zh: '镜像文件表位置超出范围' },
+    'missing': { it: 'assente', es: 'ausente', pt: 'ausente', zh: '缺失' }
+  };
+
+  /** Translates a comma-separated list of known engine fragments. */
+  function tPhrases(value) {
+    if (!value || current === 'en') return value;
+    return value.split(', ').map(function (part) {
+      var entry = NATIVE_PHRASES[part];
+      return entry && entry[current] ? entry[current] : part;
+    }).join(current === 'zh' ? '、' : ', ');
+  }
+
   function tNativeBase(text) {
     if (NATIVE_KEYS[text]) return t(NATIVE_KEYS[text]);
     // "<known message> ..." style progress updates
@@ -1968,10 +2006,11 @@
       var tpl = NATIVE_RULES[r][1][current];
       if (!tpl) break;
       for (var g = 1; g < m.length; g++) {
-        tpl = tpl.split('{' + g + '}').join(m[g] == null ? '' : m[g]);
+        tpl = tpl.split('{' + g + '}').join(m[g] == null ? '' : tPhrases(m[g]));
       }
       return tpl;
     }
+
     if (text.indexOf('Error: ') === 0) {
       return t('n_error_prefix') + ' ' + tNativeBase(text.slice(7));
     }

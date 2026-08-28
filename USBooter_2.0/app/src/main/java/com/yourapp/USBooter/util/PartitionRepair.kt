@@ -493,8 +493,8 @@ object PartitionRepair {
             )
             return
         }
-        val ntfsCopy = runCatching { device.readBlocks(part.start + part.sectors - 1, 1) }.getOrNull()
-        if (ntfsCopy != null && filesystemOf(ntfsCopy) == "NTFS") {
+        val ntfsCopy = ntfsBackupSector(device, part)
+        if (ntfsCopy != null) {
             findings.add(
                 Finding(
                     "fs-boot-$number",
@@ -545,7 +545,7 @@ object PartitionRepair {
         val reserved = le16(boot, 14)
         val fatCount = boot[16].toInt() and 0xFF
         val fatSectors = le32(boot, 36)
-        if (fatCount >= 2 && fatSectors in 1..(1 shl 22)) {
+        if (fatCount >= 2 && fatSectors in 1L..(1L shl 22)) {
             val chunk = minOf(fatSectors, 64L).toInt()
             val a = runCatching { device.readBlocks(part.start + reserved, chunk) }.getOrNull()
             val b = runCatching { device.readBlocks(part.start + reserved + fatSectors, chunk) }.getOrNull()
@@ -616,6 +616,15 @@ object PartitionRepair {
         require(boot.isNotEmpty())
     }
 
+    /**
+     * NTFS is the filesystem most often left "badly formatted": the name in the
+     * boot sector survives while the geometry fields inside it are wrong, so
+     * Windows and Android both refuse to mount the partition even though every
+     * file is still on the drive. So the boot sector is validated field by field,
+     * not just by its name, and repaired from the copy NTFS keeps in the last
+     * sector of the partition - or, when that copy is the only healthy one, the
+     * geometry is recomputed from the partition itself.
+     */
     private fun checkNtfs(
         device: UsbBulkStorageDevice,
         findings: MutableList<Finding>,
@@ -624,8 +633,65 @@ object PartitionRepair {
         boot: ByteArray
     ) {
         val copyLba = part.start + part.sectors - 1
-        val copy = runCatching { device.readBlocks(copyLba, 1) }.getOrNull()
-        if (copy != null && filesystemOf(copy) != "NTFS") {
+        val copy = ntfsBackupSector(device, part)
+        val mainProblems = ntfsBootProblems(boot, part, device.blockSize)
+        val copyIsNtfs = copy != null && filesystemOf(copy) == "NTFS"
+        val copyProblems = if (copyIsNtfs) ntfsBootProblems(copy!!, part, device.blockSize) else listOf("missing")
+
+        if (mainProblems.isNotEmpty() && copyIsNtfs && copyProblems.isEmpty()) {
+            findings.add(
+                Finding(
+                    "ntfs-boot-$number",
+                    "Partition $number: NTFS boot sector is inconsistent",
+                    "The NTFS boot sector of partition $number is present but its contents are wrong " +
+                        "(${mainProblems.joinToString(", ")}), which is why the drive is reported as not formatted. " +
+                        "The copy NTFS keeps in the last sector of the partition is intact, so it can be put back " +
+                        "with no file loss.",
+                    "safe", repairable = true
+                ) {
+                    device.writeBlocks(part.start, copy!!)
+                    device.synchronizeCache()
+                }
+            )
+            return
+        }
+
+        if (mainProblems.isNotEmpty() && !(copyIsNtfs && copyProblems.isEmpty())) {
+            val rebuilt = rebuildNtfsBootSector(boot, copy, part, device.blockSize)
+            if (rebuilt != null) {
+                findings.add(
+                    Finding(
+                        "ntfs-boot-$number",
+                        "Partition $number: NTFS boot sector must be recomputed",
+                        "Both the NTFS boot sector of partition $number and its backup copy are wrong " +
+                            "(${mainProblems.joinToString(", ")}), and the master file table was still found on the drive. " +
+                            "The boot sector can be recomputed from the partition size and the file table that was found. " +
+                            "Only the boot sector is rewritten, but because no healthy copy is left this is a best-effort " +
+                            "repair: copy anything you can still read off the drive first.",
+                        "risky", repairable = true
+                    ) {
+                        device.writeBlocks(part.start, rebuilt)
+                        device.writeBlocks(copyLba, rebuilt)
+                        device.synchronizeCache()
+                    }
+                )
+            } else {
+                findings.add(
+                    Finding(
+                        "ntfs-boot-$number",
+                        "Partition $number: NTFS structures are too damaged to repair",
+                        "The NTFS boot sector of partition $number is wrong (${mainProblems.joinToString(", ")}), " +
+                            "its backup copy is unusable and no master file table could be found on the drive. Nothing here " +
+                            "can be rebuilt without guessing: recover the files you need with a recovery tool, then reformat.",
+                        "risky", repairable = false
+                    )
+                )
+            }
+            return
+        }
+
+        // Main sector is healthy: keep the safety copy and the mirror file table in step.
+        if (!copyIsNtfs || copyProblems.isNotEmpty()) {
             findings.add(
                 Finding(
                     "ntfs-copy-$number",
@@ -635,10 +701,113 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(copyLba, boot)
+                    device.synchronizeCache()
                 }
             )
         }
+
+        if (!ntfsMftPresent(device, boot, part)) {
+            findings.add(
+                Finding(
+                    "ntfs-mft-$number",
+                    "Partition $number: master file table is unreadable",
+                    "The NTFS boot sector of partition $number is healthy but the master file table it points at does not " +
+                        "start with a valid record. The list of files can only be rebuilt by scanning the whole partition, " +
+                        "which cannot be done without risking file loss. Recover the files you need before reformatting.",
+                    "risky", repairable = false
+                )
+            )
+        }
     }
+
+    /** The NTFS safety copy: the last sector of the partition, or one sector past it. */
+    private fun ntfsBackupSector(device: UsbBulkStorageDevice, part: Part): ByteArray? {
+        val candidates = longArrayOf(part.start + part.sectors - 1, part.start + part.sectors)
+        for (lba in candidates) {
+            if (lba <= part.start || lba >= device.totalBlocks) continue
+            val sector = runCatching { device.readBlocks(lba, 1) }.getOrNull() ?: continue
+            if (filesystemOf(sector) == "NTFS") return sector
+        }
+        return null
+    }
+
+    /** Plain-language list of everything wrong inside an NTFS boot sector. */
+    private fun ntfsBootProblems(boot: ByteArray, part: Part, blockSize: Int): List<String> {
+        val problems = mutableListOf<String>()
+        if (boot.size < 512) return listOf("the sector could not be read")
+        if (!signature(boot)) problems += "the end-of-sector marker is missing"
+        val bytesPerSector = le16(boot, 11)
+        if (bytesPerSector < 512 || bytesPerSector > 4096 || (bytesPerSector and (bytesPerSector - 1)) != 0) {
+            problems += "the sector size is invalid"
+        }
+        val sectorsPerCluster = boot[13].toInt() and 0xFF
+        val clusterSectors = if (sectorsPerCluster in 1..128 && (sectorsPerCluster and (sectorsPerCluster - 1)) == 0) {
+            sectorsPerCluster
+        } else if (sectorsPerCluster >= 0xF4) {
+            1 shl (256 - sectorsPerCluster) // NTFS stores large clusters as a negative power of two
+        } else {
+            problems += "the cluster size is invalid"
+            0
+        }
+        val total = le64(boot, 40)
+        if (total <= 0 || total > part.sectors) {
+            problems += "the recorded partition size does not match the real one"
+        }
+        if (clusterSectors > 0 && total > 0) {
+            val mft = le64(boot, 48) * clusterSectors
+            val mftMirror = le64(boot, 56) * clusterSectors
+            if (mft <= 0 || mft >= total) problems += "the file-table position is out of range"
+            if (mftMirror <= 0 || mftMirror >= total) problems += "the mirror file-table position is out of range"
+        }
+        require(blockSize > 0)
+        return problems
+    }
+
+    /** True when the boot sector points at a real NTFS record ("FILE" magic). */
+    private fun ntfsMftPresent(device: UsbBulkStorageDevice, boot: ByteArray, part: Part): Boolean {
+        val sectorsPerCluster = ntfsClusterSectors(boot) ?: return false
+        for (offset in longArrayOf(le64(boot, 48), le64(boot, 56))) {
+            val lba = part.start + offset * sectorsPerCluster
+            if (lba <= part.start || lba >= device.totalBlocks) continue
+            val record = runCatching { device.readBlocks(lba, 1) }.getOrNull() ?: continue
+            if (String(record, 0, 4, Charsets.US_ASCII) == "FILE") return true
+        }
+        return false
+    }
+
+    private fun ntfsClusterSectors(boot: ByteArray): Int? {
+        if (boot.size < 512) return null
+        val raw = boot[13].toInt() and 0xFF
+        return when {
+            raw in 1..128 && (raw and (raw - 1)) == 0 -> raw
+            raw >= 0xF4 -> 1 shl (256 - raw)
+            else -> null
+        }
+    }
+
+    /**
+     * Builds a corrected NTFS boot sector: the healthiest available template with
+     * the partition size put right, but only when a real file table can still be
+     * located, so the repair is never a blind guess.
+     */
+    private fun rebuildNtfsBootSector(
+        boot: ByteArray,
+        copy: ByteArray?,
+        part: Part,
+        blockSize: Int
+    ): ByteArray? {
+        val template = listOf(boot, copy).firstOrNull {
+            it != null && it.size >= 512 && ntfsClusterSectors(it) != null && le64(it, 48) > 0
+        } ?: return null
+        val sector = template.copyOf(maxOf(blockSize, 512))
+        put64(sector, 40, part.sectors - 1) // NTFS records one sector less than the partition
+        sector[510] = 0x55
+        sector[511] = 0xAA.toByte()
+        val oem = "NTFS    ".toByteArray(Charsets.US_ASCII)
+        System.arraycopy(oem, 0, sector, 3, oem.size)
+        return sector
+    }
+
 
     private fun copyRegion(device: UsbBulkStorageDevice, from: Long, to: Long, sectors: Long) {
         val step = (64 * 1024 / device.blockSize).coerceAtLeast(1)
