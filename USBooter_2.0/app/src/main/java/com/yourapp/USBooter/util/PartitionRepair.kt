@@ -493,8 +493,8 @@ object PartitionRepair {
             )
             return
         }
-        val ntfsCopy = runCatching { device.readBlocks(part.start + part.sectors - 1, 1) }.getOrNull()
-        if (ntfsCopy != null && filesystemOf(ntfsCopy) == "NTFS") {
+        val ntfsCopy = ntfsBackupSector(device, part)
+        if (ntfsCopy != null) {
             findings.add(
                 Finding(
                     "fs-boot-$number",
