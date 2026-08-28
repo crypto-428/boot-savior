@@ -1969,6 +1969,27 @@
     return tNativeBase(text);
   }
 
+  /** Short engine fragments that appear inside longer messages as a list. */
+  var NATIVE_PHRASES = {
+    'the sector could not be read': { it: 'il settore non è leggibile', es: 'el sector no se pudo leer', pt: 'o setor não foi legível', zh: '扇区无法读取' },
+    'the end-of-sector marker is missing': { it: 'manca il marcatore di fine settore', es: 'falta la marca de fin de sector', pt: 'falta a marca de fim de setor', zh: '缺少扇区结束标记' },
+    'the sector size is invalid': { it: 'la dimensione del settore non è valida', es: 'el tamaño de sector no es válido', pt: 'o tamanho do setor não é válido', zh: '扇区大小无效' },
+    'the cluster size is invalid': { it: 'la dimensione del cluster non è valida', es: 'el tamaño de clúster no es válido', pt: 'o tamanho do cluster não é válido', zh: '簇大小无效' },
+    'the recorded partition size does not match the real one': { it: 'la dimensione registrata della partizione non corrisponde a quella reale', es: 'el tamaño registrado de la partición no coincide con el real', pt: 'o tamanho registado da partição não corresponde ao real', zh: '记录的分区大小与实际不符' },
+    'the file-table position is out of range': { it: 'la posizione della tabella dei file è fuori intervallo', es: 'la posición de la tabla de archivos está fuera de rango', pt: 'a posição da tabela de ficheiros está fora do intervalo', zh: '文件表位置超出范围' },
+    'the mirror file-table position is out of range': { it: 'la posizione della tabella dei file speculare è fuori intervallo', es: 'la posición de la tabla de archivos espejo está fuera de rango', pt: 'a posição da tabela de ficheiros espelho está fora do intervalo', zh: '镜像文件表位置超出范围' },
+    'missing': { it: 'assente', es: 'ausente', pt: 'ausente', zh: '缺失' }
+  };
+
+  /** Translates a comma-separated list of known engine fragments. */
+  function tPhrases(value) {
+    if (!value || current === 'en') return value;
+    return value.split(', ').map(function (part) {
+      var entry = NATIVE_PHRASES[part];
+      return entry && entry[current] ? entry[current] : part;
+    }).join(current === 'zh' ? '、' : ', ');
+  }
+
   function tNativeBase(text) {
     if (NATIVE_KEYS[text]) return t(NATIVE_KEYS[text]);
     // "<known message> ..." style progress updates
@@ -1985,10 +2006,11 @@
       var tpl = NATIVE_RULES[r][1][current];
       if (!tpl) break;
       for (var g = 1; g < m.length; g++) {
-        tpl = tpl.split('{' + g + '}').join(m[g] == null ? '' : m[g]);
+        tpl = tpl.split('{' + g + '}').join(m[g] == null ? '' : tPhrases(m[g]));
       }
       return tpl;
     }
+
     if (text.indexOf('Error: ') === 0) {
       return t('n_error_prefix') + ' ' + tNativeBase(text.slice(7));
     }
