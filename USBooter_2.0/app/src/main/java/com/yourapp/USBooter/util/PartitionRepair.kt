@@ -320,7 +320,7 @@ object PartitionRepair {
 
     // -------------------------------------------------------------------- MBR
 
-    private val COMMON_STARTS = longArrayOf(2048, 63, 1, 34, 8192, 4096, 32, 128)
+    private val COMMON_STARTS = listOf<Long>(2048, 63, 1, 34, 8192, 4096, 32, 128)
 
     private fun checkMbr(
         device: UsbBulkStorageDevice,
