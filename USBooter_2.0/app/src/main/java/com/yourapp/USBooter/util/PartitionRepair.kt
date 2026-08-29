@@ -95,7 +95,7 @@ object PartitionRepair {
     // ---------------------------------------------------------------- analysis
 
     private fun analyze(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         progress: (Int, String) -> Unit
     ): MutableList<Finding> {
         val findings = mutableListOf<Finding>()
@@ -145,7 +145,7 @@ object PartitionRepair {
 
     /** Partition ranges as the table describes them (MBR primaries, or GPT entries). */
     private fun partitions(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         sector0: ByteArray,
         gpt: Boolean
     ): List<Part> {
@@ -184,7 +184,7 @@ object PartitionRepair {
     // -------------------------------------------------------------------- GPT
 
     private fun checkGpt(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         findings: MutableList<Finding>,
         sector0: ByteArray,
         hasBootSignature: Boolean
@@ -257,7 +257,7 @@ object PartitionRepair {
         return crc32(copy, 0, size) == stored
     }
 
-    private fun restoreGptFromBackup(device: UsbBulkStorageDevice, backup: ByteArray) {
+    private fun restoreGptFromBackup(device: BlockDevice, backup: ByteArray) {
         val entryLba = le64(backup, 72)
         val count = le32(backup, 80).toInt().coerceIn(1, 128)
         val size = le32(backup, 84).toInt().coerceAtLeast(128)
@@ -274,7 +274,7 @@ object PartitionRepair {
         device.writeBlocks(1, header)
     }
 
-    private fun rebuildGptBackup(device: UsbBulkStorageDevice, primary: ByteArray) {
+    private fun rebuildGptBackup(device: BlockDevice, primary: ByteArray) {
         val entryLba = le64(primary, 72)
         val count = le32(primary, 80).toInt().coerceIn(1, 128)
         val size = le32(primary, 84).toInt().coerceAtLeast(128)
@@ -298,7 +298,7 @@ object PartitionRepair {
         put32(header, 16, crc32(header, 0, size))
     }
 
-    private fun writeProtectiveMbr(device: UsbBulkStorageDevice) {
+    private fun writeProtectiveMbr(device: BlockDevice) {
         val sector = ByteArray(device.blockSize)
         val entry = 446
         sector[entry + 0] = 0x00
@@ -323,7 +323,7 @@ object PartitionRepair {
     private val COMMON_STARTS = listOf<Long>(2048, 63, 1, 34, 8192, 4096, 32, 128)
 
     private fun checkMbr(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         findings: MutableList<Finding>,
         sector0: ByteArray,
         hasBootSignature: Boolean
@@ -406,7 +406,7 @@ object PartitionRepair {
         }
     }
 
-    private fun rebuildMbrAround(device: UsbBulkStorageDevice, start: Long, fs: String) {
+    private fun rebuildMbrAround(device: BlockDevice, start: Long, fs: String) {
         val sectors = device.totalBlocks - start
         val type = expectedTypeByte(fs, sectors) ?: 0x0C
         val sector = ByteArray(device.blockSize)
@@ -441,7 +441,7 @@ object PartitionRepair {
     // ------------------------------------------------------------ filesystems
 
     private fun checkFilesystem(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         findings: MutableList<Finding>,
         number: Int,
         part: Part
@@ -458,7 +458,7 @@ object PartitionRepair {
 
     /** No recognisable boot sector: look for a spare copy before declaring it lost. */
     private fun checkBrokenBootSector(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         findings: MutableList<Finding>,
         number: Int,
         part: Part
@@ -524,7 +524,7 @@ object PartitionRepair {
     }
 
     private fun checkFat32(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         findings: MutableList<Finding>,
         number: Int,
         part: Part,
@@ -570,7 +570,7 @@ object PartitionRepair {
     }
 
     private fun checkExfat(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         findings: MutableList<Finding>,
         number: Int,
         part: Part,
@@ -629,7 +629,7 @@ object PartitionRepair {
      * geometry is recomputed from the partition itself.
      */
     private fun checkNtfs(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         findings: MutableList<Finding>,
         number: Int,
         part: Part,
@@ -724,7 +724,7 @@ object PartitionRepair {
     }
 
     /** The NTFS safety copy: the last sector of the partition, or one sector past it. */
-    private fun ntfsBackupSector(device: UsbBulkStorageDevice, part: Part): ByteArray? {
+    private fun ntfsBackupSector(device: BlockDevice, part: Part): ByteArray? {
         // Windows writes the copy in the last sector of the partition, but a wrong
         // size field in the table can shift it by a sector or two, so look around.
         val candidates = longArrayOf(
@@ -774,7 +774,7 @@ object PartitionRepair {
     }
 
     /** True when the boot sector points at a real NTFS record ("FILE" magic). */
-    private fun ntfsMftPresent(device: UsbBulkStorageDevice, boot: ByteArray, part: Part): Boolean {
+    private fun ntfsMftPresent(device: BlockDevice, boot: ByteArray, part: Part): Boolean {
         val sectorsPerCluster = ntfsClusterSectors(boot) ?: return false
         for (offset in longArrayOf(le64(boot, 48), le64(boot, 56))) {
             val lba = part.start + offset * sectorsPerCluster
@@ -819,7 +819,7 @@ object PartitionRepair {
     }
 
 
-    private fun copyRegion(device: UsbBulkStorageDevice, from: Long, to: Long, sectors: Long) {
+    private fun copyRegion(device: BlockDevice, from: Long, to: Long, sectors: Long) {
         val step = (64 * 1024 / device.blockSize).coerceAtLeast(1)
         var done = 0L
         while (done < sectors) {
@@ -924,7 +924,7 @@ object PartitionRepair {
     private inline fun withDrive(
         context: Context,
         deviceName: String,
-        block: (UsbBulkStorageDevice) -> JSONObject
+        block: (BlockDevice) -> JSONObject
     ): JSONObject {
         val usbDevice = DriveDetector(context).findDeviceByName(deviceName)
             ?: return failure("The USB drive is no longer connected")
