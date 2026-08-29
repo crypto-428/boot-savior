@@ -25,11 +25,11 @@ class UsbBulkStorageDevice private constructor(
     private val usbInterface: UsbInterface,
     private val inEndpoint: UsbEndpoint,
     private val outEndpoint: UsbEndpoint
-) : BlockWriter {
+) : BlockDevice {
     override var blockSize: Int = 512
         private set
 
-    var totalBlocks: Long = 0
+    override var totalBlocks: Long = 0
         private set
 
     private val timeoutMs = 5000
@@ -169,7 +169,7 @@ class UsbBulkStorageDevice private constructor(
         get() = 64 * 1024
 
     /** Reads [count] blocks starting at logical block address [lba]. */
-    fun readBlocks(lba: Long, count: Int): ByteArray {
+    override fun readBlocks(lba: Long, count: Int): ByteArray {
         require(count >= 1) { "count out of range" }
         val out = ByteArray(count * blockSize)
         val blocksPerChunk = (maxTransferBytes / blockSize).coerceAtLeast(1)
@@ -248,7 +248,7 @@ class UsbBulkStorageDevice private constructor(
      * command is an error during flashing; silently ignoring it can produce a
      * drive that reaches 100% while its final sectors are still volatile.
      */
-    fun synchronizeCache() {
+    override fun synchronizeCache() {
         val cb = ByteArray(10)
         cb[0] = 0x35 // SYNCHRONIZE CACHE(10), LBA 0 + length 0 = whole medium
         var lastFailure: Exception? = null
