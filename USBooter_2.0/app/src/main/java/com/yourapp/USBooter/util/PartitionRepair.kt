@@ -474,6 +474,7 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(part.start, fat32Backup)
+                    device.synchronizeCache()
                 }
             )
             return
@@ -489,6 +490,7 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(part.start, device.readBlocks(part.start + 12, 12))
+                    device.synchronizeCache()
                 }
             )
             return
@@ -504,6 +506,7 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(part.start, ntfsCopy)
+                    device.synchronizeCache()
                 }
             )
             return
@@ -722,7 +725,14 @@ object PartitionRepair {
 
     /** The NTFS safety copy: the last sector of the partition, or one sector past it. */
     private fun ntfsBackupSector(device: UsbBulkStorageDevice, part: Part): ByteArray? {
-        val candidates = longArrayOf(part.start + part.sectors - 1, part.start + part.sectors)
+        // Windows writes the copy in the last sector of the partition, but a wrong
+        // size field in the table can shift it by a sector or two, so look around.
+        val candidates = longArrayOf(
+            part.start + part.sectors - 1,
+            part.start + part.sectors,
+            part.start + part.sectors - 2,
+            part.start + part.sectors + 1
+        )
         for (lba in candidates) {
             if (lba <= part.start || lba >= device.totalBlocks) continue
             val sector = runCatching { device.readBlocks(lba, 1) }.getOrNull() ?: continue
