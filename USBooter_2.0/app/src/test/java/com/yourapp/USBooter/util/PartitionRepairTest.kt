@@ -32,7 +32,7 @@ class PartitionRepairTest {
         val result = PartitionRepair.scanDevice(DriveImages.healthyNtfsDrive())
         assertEquals(listOf("clean"), ids(result))
         assertEquals("info", finding(result, "clean").getString("severity"))
-        assertEquals(0, result.getInt("problemCount"))
+        assertEquals(0, result.getInt("safeCount") + result.getInt("riskyCount"))
     }
 
     @Test
