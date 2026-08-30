@@ -66,6 +66,21 @@ object PartitionRepair {
         allowRisky: Boolean,
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
+        repairDevice(device, allowRisky, progress)
+    }
+
+    /** Scan against any block target. Used by the USB path above and by unit tests. */
+    fun scanDevice(
+        device: BlockDevice,
+        progress: (Int, String) -> Unit = { _, _ -> }
+    ): JSONObject = result(analyze(device, progress), applied = 0, repaired = false)
+
+    /** Repair against any block target. Used by the USB path above and by unit tests. */
+    fun repairDevice(
+        device: BlockDevice,
+        allowRisky: Boolean,
+        progress: (Int, String) -> Unit = { _, _ -> }
+    ): JSONObject {
         val findings = analyze(device, progress)
         val todo = findings.filter {
             it.repairable && it.fix != null && (it.severity == "safe" || allowRisky)
@@ -89,7 +104,7 @@ object PartitionRepair {
             runCatching { device.synchronizeCache() }
         }
         progress(100, "Repair finished")
-        result(findings, applied, repaired = true)
+        return result(findings, applied, repaired = true)
     }
 
     // ---------------------------------------------------------------- analysis
