@@ -104,7 +104,7 @@ object PartitionRepair {
             runCatching { device.synchronizeCache() }
         }
         progress(100, "Repair finished")
-        result(findings, applied, repaired = true)
+        return result(findings, applied, repaired = true)
     }
 
     // ---------------------------------------------------------------- analysis
