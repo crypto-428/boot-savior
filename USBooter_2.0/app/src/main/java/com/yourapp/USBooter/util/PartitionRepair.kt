@@ -675,7 +675,7 @@ object PartitionRepair {
         }
 
         if (mainProblems.isNotEmpty() && !(copyIsNtfs && copyProblems.isEmpty())) {
-            val rebuilt = rebuildNtfsBootSector(boot, copy, part, device.blockSize)
+            val rebuilt = rebuildNtfsBootSector(device, boot, copy, part, device.blockSize)
             if (rebuilt != null) {
                 findings.add(
                     Finding(
@@ -816,13 +816,17 @@ object PartitionRepair {
      * located, so the repair is never a blind guess.
      */
     private fun rebuildNtfsBootSector(
+        device: BlockDevice,
         boot: ByteArray,
         copy: ByteArray?,
         part: Part,
         blockSize: Int
     ): ByteArray? {
+        // Only a template whose file-table pointer still lands on a real MFT record
+        // is usable: otherwise the "repair" would be a blind guess.
         val template = listOf(boot, copy).firstOrNull {
-            it != null && it.size >= 512 && ntfsClusterSectors(it) != null && le64(it, 48) > 0
+            it != null && it.size >= 512 && ntfsClusterSectors(it) != null && le64(it, 48) > 0 &&
+                ntfsMftPresent(device, it, part)
         } ?: return null
         val sector = template.copyOf(maxOf(blockSize, 512))
         put64(sector, 40, part.sectors - 1) // NTFS records one sector less than the partition
