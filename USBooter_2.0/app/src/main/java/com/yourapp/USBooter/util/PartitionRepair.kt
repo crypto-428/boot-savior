@@ -675,7 +675,7 @@ object PartitionRepair {
         }
 
         if (mainProblems.isNotEmpty() && !(copyIsNtfs && copyProblems.isEmpty())) {
-            val rebuilt = rebuildNtfsBootSector(boot, copy, part, device.blockSize)
+            val rebuilt = rebuildNtfsBootSector(device, boot, copy, part, device.blockSize)
             if (rebuilt != null) {
                 findings.add(
                     Finding(
