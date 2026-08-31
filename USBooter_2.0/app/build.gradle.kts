@@ -37,6 +37,9 @@ dependencies {
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
 
     testImplementation("junit:junit:4.13.2")
+    // The android.jar used by unit tests stubs org.json with methods that throw,
+    // so the repair tests need the real implementation on the test classpath.
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }
