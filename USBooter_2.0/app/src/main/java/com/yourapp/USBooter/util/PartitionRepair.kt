@@ -724,7 +724,49 @@ object PartitionRepair {
             )
         }
 
-        if (!ntfsMftPresent(device, boot, part)) {
+        // The boot sector can be perfectly formed and the volume still be unusable,
+        // so keep looking: size drift, a stale copy and the two file tables.
+        if (copyIsNtfs && copyProblems.isEmpty() && copy != null &&
+            !boot.copyOfRange(0, 512).contentEquals(copy.copyOfRange(0, 512))
+        ) {
+            findings.add(
+                Finding(
+                    "ntfs-copy-stale-$number",
+                    "Partition $number: the two NTFS boot sectors disagree",
+                    "Partition $number has a working boot sector and a working copy at the end of the partition, but the two " +
+                        "do not describe the same volume. Windows trusts whichever it reads first, which is why the drive can " +
+                        "appear unformatted. Refreshing the copy from the working sector rewrites no file.",
+                    "safe", repairable = true
+                ) {
+                    device.writeBlocks(copyLba, boot)
+                    device.synchronizeCache()
+                }
+            )
+        }
+
+        val recorded = le64(boot, 40)
+        if (recorded in 1 until part.sectors - 1) {
+            findings.add(
+                Finding(
+                    "ntfs-size-$number",
+                    "Partition $number: NTFS records the wrong volume size",
+                    "The partition is ${part.sectors} sectors long but NTFS says the volume holds only $recorded of them. " +
+                        "This happens after a drive is cloned or a bad format, and it makes the boot-sector copy land in the " +
+                        "wrong place. Correcting the size field changes the boot sector only, never a file.",
+                    "safe", repairable = true
+                ) {
+                    val fixed = boot.copyOf()
+                    put64(fixed, 40, part.sectors - 1)
+                    device.writeBlocks(part.start, fixed)
+                    device.writeBlocks(part.start + part.sectors - 1, fixed)
+                    device.synchronizeCache()
+                }
+            )
+        }
+
+        val mainMft = ntfsRecordAt(device, boot, part, 48)
+        val mirrorMft = ntfsRecordAt(device, boot, part, 56)
+        if (!mainMft && !mirrorMft) {
             findings.add(
                 Finding(
                     "ntfs-mft-$number",
@@ -735,8 +777,40 @@ object PartitionRepair {
                     "risky", repairable = false
                 )
             )
+        } else if (!mainMft) {
+            findings.add(
+                Finding(
+                    "ntfs-mft-main-$number",
+                    "Partition $number: the main file table is damaged",
+                    "The main master file table of partition $number does not begin with a valid record, but the mirror copy " +
+                        "does. Only a full NTFS repair can rebuild the main table, and it may leave files unreachable, so copy " +
+                        "what you need off the drive first.",
+                    "risky", repairable = false
+                )
+            )
+        } else if (!mirrorMft) {
+            findings.add(
+                Finding(
+                    "ntfs-mft-mirror-$number",
+                    "Partition $number: the mirror file table is damaged",
+                    "The main master file table of partition $number is fine but its mirror copy is not. Windows will ask to " +
+                        "check the drive on the next connection. Nothing here can be rebuilt without rewriting file records, " +
+                        "so it is reported rather than repaired.",
+                    "risky", repairable = false
+                )
+            )
         }
     }
+
+    /** True when the cluster pointer at [offset] lands on a usable NTFS file record. */
+    private fun ntfsRecordAt(device: BlockDevice, boot: ByteArray, part: Part, offset: Int): Boolean {
+        val clusterSectors = ntfsClusterSectors(boot) ?: return false
+        val lba = part.start + le64(boot, offset) * clusterSectors
+        if (lba <= part.start || lba >= device.totalBlocks) return false
+        val record = runCatching { device.readBlocks(lba, 1) }.getOrNull() ?: return false
+        return String(record, 0, 4, Charsets.US_ASCII) == "FILE"
+    }
+
 
     /** The NTFS safety copy: the last sector of the partition, or one sector past it. */
     private fun ntfsBackupSector(device: BlockDevice, part: Part): ByteArray? {
