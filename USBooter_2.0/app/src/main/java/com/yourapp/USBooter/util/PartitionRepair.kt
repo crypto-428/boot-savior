@@ -384,6 +384,23 @@ object PartitionRepair {
         val entries = partitions(device, sector0, gpt = false)
 
         if (!hasBootSignature || entries.isEmpty()) {
+            // A drive formatted as one big filesystem with no table at all: the
+            // filesystem itself is fine, it just cannot boot and some systems ignore it.
+            val whole = filesystemOf(sector0)
+            if (whole != null) {
+                findings.add(
+                    Finding(
+                        "mbr-superfloppy",
+                        "The drive has no partition table",
+                        "This drive carries a $whole filesystem written straight to the first sector, with no partition table " +
+                            "around it. Windows can usually still read it, but many systems and every BIOS boot refuse it. " +
+                            "The filesystem itself is checked separately below; adding a table around it would move the " +
+                            "filesystem, which cannot be done without rewriting the drive.",
+                        "risky", repairable = false
+                    )
+                )
+                return
+            }
             val found = COMMON_STARTS.firstNotNullOfOrNull { start ->
                 if (start >= device.totalBlocks) null
                 else runCatching { device.readBlocks(start, 1) }.getOrNull()
