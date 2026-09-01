@@ -111,7 +111,8 @@ object PartitionRepair {
 
     private fun analyze(
         device: BlockDevice,
-        progress: (Int, String) -> Unit
+        progress: (Int, String) -> Unit,
+        inspected: MutableList<String> = mutableListOf()
     ): MutableList<Finding> {
         val findings = mutableListOf<Finding>()
         val bs = device.blockSize
@@ -127,15 +128,45 @@ object PartitionRepair {
 
         if (looksGpt) {
             progress(25, "Checking the GPT partition table")
+            inspected += "Partition table: GPT"
             checkGpt(device, findings, sector0, hasBootSignature)
         } else {
             progress(25, "Checking the MBR partition table")
+            inspected += if (hasBootSignature) "Partition table: MBR" else "Partition table: none"
             checkMbr(device, findings, sector0, hasBootSignature)
         }
 
         progress(45, "Checking the filesystems")
-        partitions(device, sector0, looksGpt).forEachIndexed { index, part ->
+        val parts = partitions(device, sector0, looksGpt)
+        parts.forEachIndexed { index, part ->
+            val boot = runCatching { device.readBlocks(part.start, 1) }.getOrNull()
+            inspected += "Partition ${index + 1}: ${boot?.let { filesystemOf(it) } ?: "unknown"} " +
+                "at sector ${part.start}, ${part.sectors} sectors"
+            if (part.start + part.sectors > device.totalBlocks) {
+                findings.add(
+                    Finding(
+                        "part-oversize-${index + 1}",
+                        "Partition ${index + 1} runs past the end of the drive",
+                        "The partition table says partition ${index + 1} ends beyond the last sector of this drive, so the " +
+                            "system refuses to mount it. Shrinking the recorded length to the real end of the drive changes " +
+                            "the table only and no file.",
+                        "safe", repairable = true
+                    ) {
+                        val s = device.readBlocks(0, 1)
+                        put32(s, 446 + index * 16 + 12, device.totalBlocks - part.start)
+                        device.writeBlocks(0, s)
+                        device.synchronizeCache()
+                    }
+                )
+            }
             checkFilesystem(device, findings, index + 1, part)
+        }
+
+        // A drive formatted without any partition table ("superfloppy"): the filesystem
+        // sits at sector 0. Check it too instead of reporting a clean drive.
+        if (parts.isEmpty() && filesystemOf(sector0) != null) {
+            inspected += "Whole drive: ${filesystemOf(sector0)} filesystem without a partition table"
+            checkFilesystem(device, findings, 1, Part(1, 0, device.totalBlocks, -1))
         }
 
         if (findings.isEmpty()) {
@@ -150,6 +181,7 @@ object PartitionRepair {
                 )
             )
         }
+
         progress(60, "Analysis complete")
         // Keep block size referenced so the compiler cannot warn about it going unused.
         require(bs > 0)
