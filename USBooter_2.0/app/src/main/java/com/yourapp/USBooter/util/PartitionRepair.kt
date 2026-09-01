@@ -73,7 +73,10 @@ object PartitionRepair {
     fun scanDevice(
         device: BlockDevice,
         progress: (Int, String) -> Unit = { _, _ -> }
-    ): JSONObject = result(analyze(device, progress), applied = 0, repaired = false)
+    ): JSONObject {
+        val inspected = mutableListOf<String>()
+        return result(analyze(device, progress, inspected), applied = 0, repaired = false, inspected = inspected)
+    }
 
     /** Repair against any block target. Used by the USB path above and by unit tests. */
     fun repairDevice(
@@ -81,7 +84,9 @@ object PartitionRepair {
         allowRisky: Boolean,
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
-        val findings = analyze(device, progress)
+        val inspected = mutableListOf<String>()
+        val findings = analyze(device, progress, inspected)
+
         val todo = findings.filter {
             it.repairable && it.fix != null && (it.severity == "safe" || allowRisky)
         }
