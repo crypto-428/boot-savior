@@ -52,8 +52,9 @@ object PartitionRepair {
         deviceName: String,
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
-        val findings = analyze(device, progress)
-        result(findings, applied = 0, repaired = false)
+        val inspected = mutableListOf<String>()
+        val findings = analyze(device, progress, inspected)
+        result(findings, applied = 0, repaired = false, inspected = inspected)
     }
 
     /**
@@ -73,7 +74,10 @@ object PartitionRepair {
     fun scanDevice(
         device: BlockDevice,
         progress: (Int, String) -> Unit = { _, _ -> }
-    ): JSONObject = result(analyze(device, progress), applied = 0, repaired = false)
+    ): JSONObject {
+        val inspected = mutableListOf<String>()
+        return result(analyze(device, progress, inspected), applied = 0, repaired = false, inspected = inspected)
+    }
 
     /** Repair against any block target. Used by the USB path above and by unit tests. */
     fun repairDevice(
@@ -81,7 +85,9 @@ object PartitionRepair {
         allowRisky: Boolean,
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
-        val findings = analyze(device, progress)
+        val inspected = mutableListOf<String>()
+        val findings = analyze(device, progress, inspected)
+
         val todo = findings.filter {
             it.repairable && it.fix != null && (it.severity == "safe" || allowRisky)
         }
@@ -104,14 +110,15 @@ object PartitionRepair {
             runCatching { device.synchronizeCache() }
         }
         progress(100, "Repair finished")
-        return result(findings, applied, repaired = true)
+        return result(findings, applied, repaired = true, inspected = inspected)
     }
 
     // ---------------------------------------------------------------- analysis
 
     private fun analyze(
         device: BlockDevice,
-        progress: (Int, String) -> Unit
+        progress: (Int, String) -> Unit,
+        inspected: MutableList<String> = mutableListOf()
     ): MutableList<Finding> {
         val findings = mutableListOf<Finding>()
         val bs = device.blockSize
@@ -127,15 +134,45 @@ object PartitionRepair {
 
         if (looksGpt) {
             progress(25, "Checking the GPT partition table")
+            inspected += "Partition table: GPT"
             checkGpt(device, findings, sector0, hasBootSignature)
         } else {
             progress(25, "Checking the MBR partition table")
+            inspected += if (hasBootSignature) "Partition table: MBR" else "Partition table: none"
             checkMbr(device, findings, sector0, hasBootSignature)
         }
 
         progress(45, "Checking the filesystems")
-        partitions(device, sector0, looksGpt).forEachIndexed { index, part ->
+        val parts = partitions(device, sector0, looksGpt)
+        parts.forEachIndexed { index, part ->
+            val boot = runCatching { device.readBlocks(part.start, 1) }.getOrNull()
+            inspected += "Partition ${index + 1}: ${boot?.let { filesystemOf(it) } ?: "unknown"} " +
+                "at sector ${part.start}, ${part.sectors} sectors"
+            if (part.start + part.sectors > device.totalBlocks) {
+                findings.add(
+                    Finding(
+                        "part-oversize-${index + 1}",
+                        "Partition ${index + 1} runs past the end of the drive",
+                        "The partition table says partition ${index + 1} ends beyond the last sector of this drive, so the " +
+                            "system refuses to mount it. Shrinking the recorded length to the real end of the drive changes " +
+                            "the table only and no file.",
+                        "safe", repairable = true
+                    ) {
+                        val s = device.readBlocks(0, 1)
+                        put32(s, 446 + index * 16 + 12, device.totalBlocks - part.start)
+                        device.writeBlocks(0, s)
+                        device.synchronizeCache()
+                    }
+                )
+            }
             checkFilesystem(device, findings, index + 1, part)
+        }
+
+        // A drive formatted without any partition table ("superfloppy"): the filesystem
+        // sits at sector 0. Check it too instead of reporting a clean drive.
+        if (parts.isEmpty() && filesystemOf(sector0) != null) {
+            inspected += "Whole drive: ${filesystemOf(sector0)} filesystem without a partition table"
+            checkFilesystem(device, findings, 1, Part(1, 0, device.totalBlocks, -1))
         }
 
         if (findings.isEmpty()) {
@@ -150,6 +187,7 @@ object PartitionRepair {
                 )
             )
         }
+
         progress(60, "Analysis complete")
         // Keep block size referenced so the compiler cannot warn about it going unused.
         require(bs > 0)
@@ -346,6 +384,23 @@ object PartitionRepair {
         val entries = partitions(device, sector0, gpt = false)
 
         if (!hasBootSignature || entries.isEmpty()) {
+            // A drive formatted as one big filesystem with no table at all: the
+            // filesystem itself is fine, it just cannot boot and some systems ignore it.
+            val whole = filesystemOf(sector0)
+            if (whole != null) {
+                findings.add(
+                    Finding(
+                        "mbr-superfloppy",
+                        "The drive has no partition table",
+                        "This drive carries a $whole filesystem written straight to the first sector, with no partition table " +
+                            "around it. Windows can usually still read it, but many systems and every BIOS boot refuse it. " +
+                            "The filesystem itself is checked separately below; adding a table around it would move the " +
+                            "filesystem, which cannot be done without rewriting the drive.",
+                        "risky", repairable = false
+                    )
+                )
+                return
+            }
             val found = COMMON_STARTS.firstNotNullOfOrNull { start ->
                 if (start >= device.totalBlocks) null
                 else runCatching { device.readBlocks(start, 1) }.getOrNull()
@@ -724,7 +779,49 @@ object PartitionRepair {
             )
         }
 
-        if (!ntfsMftPresent(device, boot, part)) {
+        // The boot sector can be perfectly formed and the volume still be unusable,
+        // so keep looking: size drift, a stale copy and the two file tables.
+        if (copyIsNtfs && copyProblems.isEmpty() && copy != null &&
+            !boot.copyOfRange(0, 512).contentEquals(copy.copyOfRange(0, 512))
+        ) {
+            findings.add(
+                Finding(
+                    "ntfs-copy-stale-$number",
+                    "Partition $number: the two NTFS boot sectors disagree",
+                    "Partition $number has a working boot sector and a working copy at the end of the partition, but the two " +
+                        "do not describe the same volume. Windows trusts whichever it reads first, which is why the drive can " +
+                        "appear unformatted. Refreshing the copy from the working sector rewrites no file.",
+                    "safe", repairable = true
+                ) {
+                    device.writeBlocks(copyLba, boot)
+                    device.synchronizeCache()
+                }
+            )
+        }
+
+        val recorded = le64(boot, 40)
+        if (recorded in 1 until part.sectors - 1) {
+            findings.add(
+                Finding(
+                    "ntfs-size-$number",
+                    "Partition $number: NTFS records the wrong volume size",
+                    "The partition is ${part.sectors} sectors long but NTFS says the volume holds only $recorded of them. " +
+                        "This happens after a drive is cloned or a bad format, and it makes the boot-sector copy land in the " +
+                        "wrong place. Correcting the size field changes the boot sector only, never a file.",
+                    "safe", repairable = true
+                ) {
+                    val fixed = boot.copyOf()
+                    put64(fixed, 40, part.sectors - 1)
+                    device.writeBlocks(part.start, fixed)
+                    device.writeBlocks(part.start + part.sectors - 1, fixed)
+                    device.synchronizeCache()
+                }
+            )
+        }
+
+        val mainMft = ntfsRecordAt(device, boot, part, 48)
+        val mirrorMft = ntfsRecordAt(device, boot, part, 56)
+        if (!mainMft && !mirrorMft) {
             findings.add(
                 Finding(
                     "ntfs-mft-$number",
@@ -735,8 +832,40 @@ object PartitionRepair {
                     "risky", repairable = false
                 )
             )
+        } else if (!mainMft) {
+            findings.add(
+                Finding(
+                    "ntfs-mft-main-$number",
+                    "Partition $number: the main file table is damaged",
+                    "The main master file table of partition $number does not begin with a valid record, but the mirror copy " +
+                        "does. Only a full NTFS repair can rebuild the main table, and it may leave files unreachable, so copy " +
+                        "what you need off the drive first.",
+                    "risky", repairable = false
+                )
+            )
+        } else if (!mirrorMft) {
+            findings.add(
+                Finding(
+                    "ntfs-mft-mirror-$number",
+                    "Partition $number: the mirror file table is damaged",
+                    "The main master file table of partition $number is fine but its mirror copy is not. Windows will ask to " +
+                        "check the drive on the next connection. Nothing here can be rebuilt without rewriting file records, " +
+                        "so it is reported rather than repaired.",
+                    "risky", repairable = false
+                )
+            )
         }
     }
+
+    /** True when the cluster pointer at [offset] lands on a usable NTFS file record. */
+    private fun ntfsRecordAt(device: BlockDevice, boot: ByteArray, part: Part, offset: Int): Boolean {
+        val clusterSectors = ntfsClusterSectors(boot) ?: return false
+        val lba = part.start + le64(boot, offset) * clusterSectors
+        if (lba <= part.start || lba >= device.totalBlocks) return false
+        val record = runCatching { device.readBlocks(lba, 1) }.getOrNull() ?: return false
+        return String(record, 0, 4, Charsets.US_ASCII) == "FILE"
+    }
+
 
     /** The NTFS safety copy: the last sector of the partition, or one sector past it. */
     private fun ntfsBackupSector(device: BlockDevice, part: Part): ByteArray? {
@@ -907,7 +1036,12 @@ object PartitionRepair {
         return crc.value
     }
 
-    private fun result(findings: List<Finding>, applied: Int, repaired: Boolean): JSONObject {
+    private fun result(
+        findings: List<Finding>,
+        applied: Int,
+        repaired: Boolean,
+        inspected: List<String> = emptyList()
+    ): JSONObject {
         val problems = findings.filter { it.severity != "info" }
         val safe = problems.count { it.severity == "safe" }
         val risky = problems.count { it.severity == "risky" }
@@ -920,6 +1054,7 @@ object PartitionRepair {
             put("riskyCount", risky)
             put("remainingCount", remaining)
             put("findings", JSONArray().apply { findings.forEach { put(it.toJson()) } })
+            put("inspected", JSONArray().apply { inspected.forEach { put(it) } })
             put(
                 "summary",
                 when {
