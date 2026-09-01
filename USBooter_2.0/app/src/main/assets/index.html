@@ -1373,6 +1373,7 @@
           <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="repair_title">Partition repair</div>
           <div id="repairSummary" style="font-size:12px;color:var(--text-muted);"></div>
           <div id="repairChecks" style="margin-top:6px;"></div>
+        <div id="repairInspected" style="display:none;text-align:left;margin-top:8px;"></div>
           <button class="btn" id="repairApplyBtn" onclick="repairPartitions(false)" style="display:none;width:100%;margin-top:10px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_apply">Repair without losing files</button>
           <button class="btn danger" id="repairRiskyBtn" onclick="confirmRiskyRepair()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_risky">Repair anyway (files may be lost)</button>
         </div>
@@ -2377,6 +2378,19 @@
         (f.error ? '<br><small style="color:var(--danger)">' + escapeHtml(I18N.tNative(f.error)) + '</small>' : '') +
         '</span></div>';
     }).join('') || '<div style="font-size:12px;color:var(--text-muted);">' + t('repair_none') + '</div>';
+
+    // Always show what was actually inspected, so a clean result is verifiable.
+    const inspected = Array.isArray(result.inspected) ? result.inspected : [];
+    const inspectedBox = document.getElementById('repairInspected');
+    if (inspectedBox) {
+      inspectedBox.style.display = inspected.length ? '' : 'none';
+      inspectedBox.innerHTML = inspected.length
+        ? '<div style="font-size:11px;opacity:.75;margin-bottom:4px;">' + t('repair_inspected') + '</div>' +
+          inspected.map(function (line) {
+            return '<div style="font-size:11px;opacity:.75;">\u2022 ' + escapeHtml(I18N.tNative(line)) + '</div>';
+          }).join('')
+        : '';
+    }
 
     setRepairBusy(false);
     const pending = findings.filter(function (f) { return f.repairable && !f.applied; });
