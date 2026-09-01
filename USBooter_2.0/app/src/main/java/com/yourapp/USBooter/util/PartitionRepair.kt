@@ -52,8 +52,9 @@ object PartitionRepair {
         deviceName: String,
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
-        val findings = analyze(device, progress)
-        result(findings, applied = 0, repaired = false)
+        val inspected = mutableListOf<String>()
+        val findings = analyze(device, progress, inspected)
+        result(findings, applied = 0, repaired = false, inspected = inspected)
     }
 
     /**
@@ -109,7 +110,7 @@ object PartitionRepair {
             runCatching { device.synchronizeCache() }
         }
         progress(100, "Repair finished")
-        return result(findings, applied, repaired = true)
+        return result(findings, applied, repaired = true, inspected = inspected)
     }
 
     // ---------------------------------------------------------------- analysis
@@ -1018,7 +1019,12 @@ object PartitionRepair {
         return crc.value
     }
 
-    private fun result(findings: List<Finding>, applied: Int, repaired: Boolean): JSONObject {
+    private fun result(
+        findings: List<Finding>,
+        applied: Int,
+        repaired: Boolean,
+        inspected: List<String> = emptyList()
+    ): JSONObject {
         val problems = findings.filter { it.severity != "info" }
         val safe = problems.count { it.severity == "safe" }
         val risky = problems.count { it.severity == "risky" }
@@ -1031,6 +1037,7 @@ object PartitionRepair {
             put("riskyCount", risky)
             put("remainingCount", remaining)
             put("findings", JSONArray().apply { findings.forEach { put(it.toJson()) } })
+            put("inspected", JSONArray().apply { inspected.forEach { put(it) } })
             put(
                 "summary",
                 when {
