@@ -95,7 +95,9 @@ class WebAppInterface(private val activity: MainActivity) {
                         label = pJson.optString("label", "DATA"),
                         sizeMB = pJson.optInt("sizeMB", -1),
                         filesystem = fs,
-                        isESP = pJson.optBoolean("isESP", false)
+                        isESP = pJson.optBoolean("isESP", false),
+                        startLba = if (pJson.has("startLba")) pJson.optLong("startLba") else null,
+                        sizeSectors = if (pJson.has("sizeSectors")) pJson.optLong("sizeSectors") else null
                     )
                 )
             }

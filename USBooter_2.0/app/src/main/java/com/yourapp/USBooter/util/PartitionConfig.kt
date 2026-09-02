@@ -27,7 +27,10 @@ data class PartitionDefinition(
     val label: String,
     val sizeMB: Int,          // -1 means "fill remaining space"
     val filesystem: Filesystem,
-    val isESP: Boolean = false
+    val isESP: Boolean = false,
+    /** Exact repaired geometry. Both values must be supplied together. */
+    val startLba: Long? = null,
+    val sizeSectors: Long? = null
 ) : Serializable
 
 /**
@@ -76,6 +79,15 @@ data class LayoutConfig(
 
         if (fillPartitionCount() > 1) {
             errors.add("Only one partition can fill remaining space")
+        }
+
+        partitions.forEach { part ->
+            if ((part.startLba == null) != (part.sizeSectors == null)) {
+                errors.add("Partition '${part.label}' has incomplete repaired geometry")
+            }
+            if (part.startLba != null && (part.startLba < 1 || (part.sizeSectors ?: 0) < 1)) {
+                errors.add("Partition '${part.label}' has invalid repaired geometry")
+            }
         }
 
         val espPartitions = partitions.filter { it.isESP }

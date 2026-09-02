@@ -144,9 +144,12 @@ object PartitionRepair {
 
         progress(45, "Checking the filesystems")
         val parts = partitions(device, sector0, looksGpt)
+        var recognisedFilesystems = 0
         parts.forEachIndexed { index, part ->
             val boot = runCatching { device.readBlocks(part.start, 1) }.getOrNull()
-            inspected += "Partition ${index + 1}: ${boot?.let { filesystemOf(it) } ?: "unknown"} " +
+            val filesystem = boot?.let { filesystemOf(it) }
+            if (filesystem != null) recognisedFilesystems++
+            inspected += "Partition ${index + 1}: ${filesystem ?: "unknown"} " +
                 "at sector ${part.start}, ${part.sectors} sectors"
             if (part.start + part.sectors > device.totalBlocks) {
                 findings.add(
@@ -171,8 +174,21 @@ object PartitionRepair {
         // A drive formatted without any partition table ("superfloppy"): the filesystem
         // sits at sector 0. Check it too instead of reporting a clean drive.
         if (parts.isEmpty() && filesystemOf(sector0) != null) {
+            recognisedFilesystems++
             inspected += "Whole drive: ${filesystemOf(sector0)} filesystem without a partition table"
             checkFilesystem(device, findings, 1, Part(1, 0, device.totalBlocks, -1))
+        }
+
+        if (parts.isNotEmpty() && recognisedFilesystems == 0 && findings.none { it.id.startsWith("fs-boot-") }) {
+            findings.add(
+                Finding(
+                    "fs-none",
+                    "No readable filesystem was found",
+                    "The partition table contains ${parts.size} partition(s), but none has a recognisable FAT32, exFAT or NTFS boot sector. " +
+                        "The drive cannot be declared healthy. Its filesystem metadata may be damaged or it may use an unsupported format.",
+                    "risky", repairable = false
+                )
+            )
         }
 
         if (findings.isEmpty()) {
@@ -229,9 +245,37 @@ object PartitionRepair {
             val start = le32(sector0, base + 8)
             val count = le32(sector0, base + 12)
             if (type == 0 || start <= 0 || count <= 0 || start >= device.totalBlocks) continue
-            out.add(Part(i + 1, start, count, type))
+            if (type in setOf(0x05, 0x0F, 0x85)) {
+                readLogicalPartitions(device, start, out)
+            } else {
+                out.add(Part(i + 1, start, count, type))
+            }
         }
         return out
+    }
+
+    /** Follows the EBR chain used by MBR logical partitions. */
+    private fun readLogicalPartitions(device: BlockDevice, extendedStart: Long, out: MutableList<Part>) {
+        var ebrLba = extendedStart
+        val visited = mutableSetOf<Long>()
+        repeat(128) {
+            if (ebrLba <= 0 || ebrLba >= device.totalBlocks || !visited.add(ebrLba)) return
+            val ebr = runCatching { device.readBlocks(ebrLba, 1) }.getOrNull() ?: return
+            if (!signature(ebr)) return
+            val logicalType = ebr[450].toInt() and 0xFF
+            val relativeStart = le32(ebr, 454)
+            val count = le32(ebr, 458)
+            if (logicalType != 0 && relativeStart > 0 && count > 0) {
+                val absoluteStart = ebrLba + relativeStart
+                if (absoluteStart < device.totalBlocks) {
+                    out.add(Part(out.size + 1, absoluteStart, count, logicalType))
+                }
+            }
+            val nextType = ebr[466].toInt() and 0xFF
+            val nextRelative = le32(ebr, 470)
+            if (nextType !in setOf(0x05, 0x0F, 0x85) || nextRelative <= 0) return
+            ebrLba = extendedStart + nextRelative
+        }
     }
 
     // -------------------------------------------------------------------- GPT
@@ -1046,6 +1090,7 @@ object PartitionRepair {
         val safe = problems.count { it.severity == "safe" }
         val risky = problems.count { it.severity == "risky" }
         val remaining = problems.count { !it.applied }
+        val layoutParts = inspected // layout is built separately from authoritative on-disk structures below
         return JSONObject().apply {
             put("ok", problems.isEmpty() || (repaired && remaining == 0))
             put("repaired", repaired)
