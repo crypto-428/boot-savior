@@ -868,6 +868,31 @@ class FormatEngine(
     private fun computePartitionLayout(): List<PlannedPartition> {
         val blockSize = device.blockSize
 
+        val explicit = config.partitions.mapNotNull { partition ->
+            val start = partition.startLba
+            val size = partition.sizeSectors
+            if (start == null || size == null) null else PlannedPartition(partition, start, size)
+        }
+        if (explicit.isNotEmpty()) {
+            require(explicit.size == config.partitions.size) { "Repaired geometry must be supplied for every partition" }
+            explicit.sortedBy { it.startLba }.forEachIndexed { index, part ->
+                val reservedEnd = if (config.tableType == PartitionTableType.GPT) {
+                    Gpt.reservedSectorsAtEnd(blockSize)
+                } else 0L
+                require(part.startLba > 0 && part.sizeInSectors > 0) { "Invalid repaired partition geometry" }
+                require(part.startLba + part.sizeInSectors <= device.totalBlocks - reservedEnd) {
+                    "Repaired partition geometry extends past the drive"
+                }
+                if (index > 0) {
+                    val previous = explicit.sortedBy { it.startLba }[index - 1]
+                    require(previous.startLba + previous.sizeInSectors <= part.startLba) {
+                        "Repaired partitions overlap"
+                    }
+                }
+            }
+            return explicit
+        }
+
         val startCursor = when (config.tableType) {
             PartitionTableType.MBR -> ALIGNMENT_SECTORS
             PartitionTableType.GPT -> maxOf(ALIGNMENT_SECTORS, Gpt.reservedSectorsAtStart(blockSize))
