@@ -1374,6 +1374,13 @@
           <div id="repairSummary" style="font-size:12px;color:var(--text-muted);"></div>
           <div id="repairChecks" style="margin-top:6px;"></div>
         <div id="repairInspected" style="display:none;text-align:left;margin-top:8px;"></div>
+          <div id="repairLayoutBox" style="display:none;text-align:left;margin-top:10px;">
+            <div id="repairLayoutList"></div>
+            <label style="display:flex;gap:8px;align-items:flex-start;margin-top:6px;font-size:12px;color:var(--text-muted);">
+              <input type="checkbox" id="repairUseLayout">
+              <span data-i18n="repair_use_layout">Reuse this repaired layout when creating the bootable drive</span>
+            </label>
+          </div>
           <button class="btn" id="repairApplyBtn" onclick="repairPartitions(false)" style="display:none;width:100%;margin-top:10px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_apply">Repair without losing files</button>
           <button class="btn danger" id="repairRiskyBtn" onclick="confirmRiskyRepair()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_risky">Repair anyway (files may be lost)</button>
         </div>
@@ -1864,7 +1871,11 @@
       { single: t('single'), dual: t('dual'), multi: t('multi') }[state.partitionScheme] || state.partitionScheme;
     document.getElementById('confirmMap').innerHTML = document.getElementById('partitionMap').innerHTML;
 
-    if (state.partitionScheme === 'single') {
+    const useLayoutEl = document.getElementById('repairUseLayout');
+    if (useLayoutEl && useLayoutEl.checked && (state.repairLayout || []).length) {
+        document.getElementById('confirmFS').textContent =
+          state.repairLayout.map(p => p.filesystem).join(" + ");
+    } else if (state.partitionScheme === 'single') {
         document.getElementById('confirmFS').textContent = state.fileSystem;
     } else if (state.partitionScheme === 'dual') {
         document.getElementById('confirmFS').textContent = document.getElementById('p1fs').value + " + " + document.getElementById('p2fs').value;
@@ -1977,7 +1988,20 @@
       partitions: []
     };
 
-    if (state.partitionScheme === 'single') {
+    const useLayoutEl = document.getElementById('repairUseLayout');
+    const reuseLayout = !!(useLayoutEl && useLayoutEl.checked && (state.repairLayout || []).length);
+    if (reuseLayout) {
+      const layout = state.repairLayout;
+      config.tableType = layout[0].table || state.tableFormat;
+      layout.forEach(function (p) {
+        config.partitions.push({
+          fs: p.filesystem,
+          sizeMB: Math.max(1, Math.floor((p.sizeSectors * 512) / 1000000)),
+          startLba: p.startLba,
+          sizeSectors: p.sizeSectors
+        });
+      });
+    } else if (state.partitionScheme === 'single') {
       config.partitions.push({ fs: state.fileSystem, sizeMB: -1 });
     } else if (state.partitionScheme === 'dual') {
       const p1val = parseFloat(document.getElementById('p1size').value) || 0;
@@ -2388,6 +2412,24 @@
         ? '<div style="font-size:11px;opacity:.75;margin-bottom:4px;">' + t('repair_inspected') + '</div>' +
           inspected.map(function (line) {
             return '<div style="font-size:11px;opacity:.75;">\u2022 ' + escapeHtml(I18N.tNative(line)) + '</div>';
+          }).join('')
+        : '';
+    }
+
+    // Detected on-disk geometry, offered as the layout to reuse when formatting.
+    state.repairLayout = Array.isArray(result.layout) ? result.layout : [];
+    const layoutBox = document.getElementById('repairLayoutBox');
+    if (layoutBox) {
+      const usable = state.repairLayout.filter(function (p) { return p.filesystem && p.startLba > 0 && p.sizeSectors > 0; });
+      state.repairLayout = usable;
+      layoutBox.style.display = usable.length ? '' : 'none';
+      if (!usable.length) document.getElementById('repairUseLayout').checked = false;
+      document.getElementById('repairLayoutList').innerHTML = usable.length
+        ? '<div style="font-size:11px;opacity:.75;margin-bottom:4px;">' + t('repair_layout_title') + '</div>' +
+          usable.map(function (p) {
+            const mb = Math.round((p.sizeSectors * 512) / 1000000);
+            return '<div style="font-size:11px;opacity:.75;">\u2022 ' + escapeHtml(p.filesystem) +
+              ' \u00b7 ' + mb + ' MB \u00b7 LBA ' + p.startLba + '</div>';
           }).join('')
         : '';
     }
