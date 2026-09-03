@@ -53,8 +53,9 @@ object PartitionRepair {
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
         val inspected = mutableListOf<String>()
-        val findings = analyze(device, progress, inspected)
-        result(findings, applied = 0, repaired = false, inspected = inspected)
+        val layout = mutableListOf<JSONObject>()
+        val findings = analyze(device, progress, inspected, layout)
+        result(findings, applied = 0, repaired = false, inspected = inspected, layout = layout)
     }
 
     /**
@@ -76,7 +77,11 @@ object PartitionRepair {
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
         val inspected = mutableListOf<String>()
-        return result(analyze(device, progress, inspected), applied = 0, repaired = false, inspected = inspected)
+        val layout = mutableListOf<JSONObject>()
+        return result(
+            analyze(device, progress, inspected, layout),
+            applied = 0, repaired = false, inspected = inspected, layout = layout
+        )
     }
 
     /** Repair against any block target. Used by the USB path above and by unit tests. */
@@ -86,7 +91,8 @@ object PartitionRepair {
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
         val inspected = mutableListOf<String>()
-        val findings = analyze(device, progress, inspected)
+        val layout = mutableListOf<JSONObject>()
+        val findings = analyze(device, progress, inspected, layout)
 
         val todo = findings.filter {
             it.repairable && it.fix != null && (it.severity == "safe" || allowRisky)
@@ -110,7 +116,7 @@ object PartitionRepair {
             runCatching { device.synchronizeCache() }
         }
         progress(100, "Repair finished")
-        return result(findings, applied, repaired = true, inspected = inspected)
+        return result(findings, applied, repaired = true, inspected = inspected, layout = layout)
     }
 
     // ---------------------------------------------------------------- analysis
@@ -118,7 +124,8 @@ object PartitionRepair {
     private fun analyze(
         device: BlockDevice,
         progress: (Int, String) -> Unit,
-        inspected: MutableList<String> = mutableListOf()
+        inspected: MutableList<String> = mutableListOf(),
+        layout: MutableList<JSONObject> = mutableListOf()
     ): MutableList<Finding> {
         val findings = mutableListOf<Finding>()
         val bs = device.blockSize
@@ -149,6 +156,16 @@ object PartitionRepair {
             val boot = runCatching { device.readBlocks(part.start, 1) }.getOrNull()
             val filesystem = boot?.let { filesystemOf(it) }
             if (filesystem != null) recognisedFilesystems++
+            layout.add(
+                JSONObject().apply {
+                    put("index", index + 1)
+                    put("label", filesystem ?: "UNKNOWN")
+                    put("filesystem", filesystem ?: "")
+                    put("startLba", part.start)
+                    put("sizeSectors", part.sectors)
+                    put("table", if (looksGpt) "GPT" else "MBR")
+                }
+            )
             inspected += "Partition ${index + 1}: ${filesystem ?: "unknown"} " +
                 "at sector ${part.start}, ${part.sectors} sectors"
             if (part.start + part.sectors > device.totalBlocks) {
@@ -1084,13 +1101,13 @@ object PartitionRepair {
         findings: List<Finding>,
         applied: Int,
         repaired: Boolean,
-        inspected: List<String> = emptyList()
+        inspected: List<String> = emptyList(),
+        layout: List<JSONObject> = emptyList()
     ): JSONObject {
         val problems = findings.filter { it.severity != "info" }
         val safe = problems.count { it.severity == "safe" }
         val risky = problems.count { it.severity == "risky" }
         val remaining = problems.count { !it.applied }
-        val layoutParts = inspected // layout is built separately from authoritative on-disk structures below
         return JSONObject().apply {
             put("ok", problems.isEmpty() || (repaired && remaining == 0))
             put("repaired", repaired)
@@ -1100,6 +1117,7 @@ object PartitionRepair {
             put("remainingCount", remaining)
             put("findings", JSONArray().apply { findings.forEach { put(it.toJson()) } })
             put("inspected", JSONArray().apply { inspected.forEach { put(it) } })
+            put("layout", JSONArray().apply { layout.forEach { put(it) } })
             put(
                 "summary",
                 when {
