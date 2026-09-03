@@ -1872,18 +1872,9 @@
     document.getElementById('confirmMap').innerHTML = document.getElementById('partitionMap').innerHTML;
 
     const useLayoutEl = document.getElementById('repairUseLayout');
-    const reuseLayout = !!(useLayoutEl && useLayoutEl.checked && (state.repairLayout || []).length);
-    if (reuseLayout) {
-      const layout = state.repairLayout;
-      config.tableType = layout[0].table || state.tableFormat;
-      layout.forEach(function (p) {
-        config.partitions.push({
-          fs: p.filesystem,
-          sizeMB: Math.max(1, Math.floor((p.sizeSectors * 512) / 1000000)),
-          startLba: p.startLba,
-          sizeSectors: p.sizeSectors
-        });
-      });
+    if (useLayoutEl && useLayoutEl.checked && (state.repairLayout || []).length) {
+        document.getElementById('confirmFS').textContent =
+          state.repairLayout.map(p => p.filesystem).join(" + ");
     } else if (state.partitionScheme === 'single') {
         document.getElementById('confirmFS').textContent = state.fileSystem;
     } else if (state.partitionScheme === 'dual') {
