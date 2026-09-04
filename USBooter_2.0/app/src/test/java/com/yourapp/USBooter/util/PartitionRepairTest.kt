@@ -222,7 +222,32 @@ class PartitionRepairTest {
         assertEquals(PART_START, readLe32(table, 446 + 8))
     }
 
+    @Test
+    fun `partition entry with impossible geometry is reported instead of ignored`() {
+        val device = DriveImages.healthyNtfsDrive()
+        val table = device.sector(0)
+        // Keep the entry non-blank but destroy its start sector, the way a bad
+        // reformat does. The drive must not be declared clean.
+        DriveImages.le(table, 446 + 8, 0L, 4)
+        device.put(0, table)
+
+        val scan = PartitionRepair.scanDevice(device)
+        assertTrue(ids(scan).contains("part-entry-1"))
+        assertFalse(ids(scan).contains("clean"))
+        assertEquals("risky", finding(scan, "part-entry-1").getString("severity"))
+    }
+
+    @Test
+    fun `scan report includes the raw sector bytes it inspected`() {
+        val scan = PartitionRepair.scanDevice(DriveImages.healthyNtfsDrive())
+        val inspected = scan.getJSONArray("inspected")
+        val lines = (0 until inspected.length()).map { inspected.getString(it) }
+        assertTrue(lines.any { it.startsWith("Sector 0 bytes:") })
+        assertTrue(lines.any { it.contains("boot sector bytes:") })
+    }
+
     // ---------------------------------------------------------------- helpers
+
 
     private fun brokenNtfsBothCopies(): FakeBlockDevice {
         val device = FakeBlockDevice(20_000)
