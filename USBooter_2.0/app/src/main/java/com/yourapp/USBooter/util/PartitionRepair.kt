@@ -150,12 +150,40 @@ object PartitionRepair {
         }
 
         progress(45, "Checking the filesystems")
-        val parts = partitions(device, sector0, looksGpt)
+        inspected += "Sector 0 bytes: ${hexDump(sector0)}"
+        val brokenEntries = mutableListOf<Int>()
+        val parts = partitions(device, sector0, looksGpt, brokenEntries)
+        brokenEntries.forEach { slot ->
+            findings.add(
+                Finding(
+                    "part-entry-$slot",
+                    "Partition entry $slot is corrupted",
+                    "Slot $slot of the partition table contains data, but its start sector or length is impossible, " +
+                        "so the system ignores the partition completely. It can only be rebuilt by searching the drive " +
+                        "for a filesystem, which may not recover every file.",
+                    "risky", repairable = false
+                )
+            )
+        }
         var recognisedFilesystems = 0
         parts.forEachIndexed { index, part ->
             val boot = runCatching { device.readBlocks(part.start, 1) }.getOrNull()
             val filesystem = boot?.let { filesystemOf(it) }
             if (filesystem != null) recognisedFilesystems++
+            if (boot == null) {
+                findings.add(
+                    Finding(
+                        "part-unreadable-${index + 1}",
+                        "Partition ${index + 1} cannot be read",
+                        "The drive refused to return the first sector of partition ${index + 1}. This is usually failing " +
+                            "hardware or a bad connection rather than a damaged partition table, so no repair is attempted.",
+                        "risky", repairable = false
+                    )
+                )
+            } else {
+                inspected += "Partition ${index + 1} boot sector bytes: ${hexDump(boot)}"
+            }
+
             layout.add(
                 JSONObject().apply {
                     put("index", index + 1)
@@ -233,7 +261,8 @@ object PartitionRepair {
     private fun partitions(
         device: BlockDevice,
         sector0: ByteArray,
-        gpt: Boolean
+        gpt: Boolean,
+        broken: MutableList<Int> = mutableListOf()
     ): List<Part> {
         val out = mutableListOf<Part>()
         if (gpt) {
@@ -250,7 +279,7 @@ object PartitionRepair {
                 if ((0 until 16).all { table[base + it] == 0.toByte() }) continue
                 val first = le64(table, base + 32)
                 val last = le64(table, base + 40)
-                if (first <= 0 || last < first) continue
+                if (first <= 0 || last < first) { broken.add(i + 1); continue }
                 out.add(Part(i + 1, first, last - first + 1, -1))
             }
             return out
@@ -261,7 +290,13 @@ object PartitionRepair {
             val type = sector0[base + 4].toInt() and 0xFF
             val start = le32(sector0, base + 8)
             val count = le32(sector0, base + 12)
-            if (type == 0 || start <= 0 || count <= 0 || start >= device.totalBlocks) continue
+            val blank = (0 until 16).all { sector0[base + it] == 0.toByte() }
+            if (type == 0 || start <= 0 || count <= 0 || start >= device.totalBlocks) {
+                // A non-blank entry with impossible geometry is corruption, not an
+                // empty slot: report it instead of silently dropping it.
+                if (!blank) broken.add(i + 1)
+                continue
+            }
             if (type in setOf(0x05, 0x0F, 0x85)) {
                 readLogicalPartitions(device, start, out)
             } else {
@@ -270,6 +305,7 @@ object PartitionRepair {
         }
         return out
     }
+
 
     /** Follows the EBR chain used by MBR logical partitions. */
     private fun readLogicalPartitions(device: BlockDevice, extendedStart: Long, out: MutableList<Part>) {
@@ -1137,6 +1173,18 @@ object PartitionRepair {
         put("summary", message)
         put("findings", JSONArray())
     }
+
+    /** First bytes of a sector as hex, so a real damaged drive can be diagnosed from the report. */
+    private fun hexDump(sector: ByteArray, count: Int = 32): String {
+        val n = minOf(count, sector.size)
+        val sb = StringBuilder(n * 3)
+        for (i in 0 until n) {
+            if (i > 0) sb.append(' ')
+            sb.append("%02X".format(sector[i].toInt() and 0xFF))
+        }
+        return sb.toString()
+    }
+
 
     private inline fun withDrive(
         context: Context,
