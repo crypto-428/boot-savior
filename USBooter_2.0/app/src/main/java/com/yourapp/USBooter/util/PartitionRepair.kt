@@ -150,12 +150,40 @@ object PartitionRepair {
         }
 
         progress(45, "Checking the filesystems")
-        val parts = partitions(device, sector0, looksGpt)
+        inspected += "Sector 0 bytes: ${hexDump(sector0)}"
+        val brokenEntries = mutableListOf<Int>()
+        val parts = partitions(device, sector0, looksGpt, brokenEntries)
+        brokenEntries.forEach { slot ->
+            findings.add(
+                Finding(
+                    "part-entry-$slot",
+                    "Partition entry $slot is corrupted",
+                    "Slot $slot of the partition table contains data, but its start sector or length is impossible, " +
+                        "so the system ignores the partition completely. It can only be rebuilt by searching the drive " +
+                        "for a filesystem, which may not recover every file.",
+                    "risky", repairable = false
+                )
+            )
+        }
         var recognisedFilesystems = 0
         parts.forEachIndexed { index, part ->
             val boot = runCatching { device.readBlocks(part.start, 1) }.getOrNull()
             val filesystem = boot?.let { filesystemOf(it) }
             if (filesystem != null) recognisedFilesystems++
+            if (boot == null) {
+                findings.add(
+                    Finding(
+                        "part-unreadable-${index + 1}",
+                        "Partition ${index + 1} cannot be read",
+                        "The drive refused to return the first sector of partition ${index + 1}. This is usually failing " +
+                            "hardware or a bad connection rather than a damaged partition table, so no repair is attempted.",
+                        "risky", repairable = false
+                    )
+                )
+            } else {
+                inspected += "Partition ${index + 1} boot sector bytes: ${hexDump(boot)}"
+            }
+
             layout.add(
                 JSONObject().apply {
                     put("index", index + 1)
