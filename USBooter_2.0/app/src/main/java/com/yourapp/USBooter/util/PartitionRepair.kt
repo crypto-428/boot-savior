@@ -233,7 +233,8 @@ object PartitionRepair {
     private fun partitions(
         device: BlockDevice,
         sector0: ByteArray,
-        gpt: Boolean
+        gpt: Boolean,
+        broken: MutableList<Int> = mutableListOf()
     ): List<Part> {
         val out = mutableListOf<Part>()
         if (gpt) {
@@ -250,7 +251,7 @@ object PartitionRepair {
                 if ((0 until 16).all { table[base + it] == 0.toByte() }) continue
                 val first = le64(table, base + 32)
                 val last = le64(table, base + 40)
-                if (first <= 0 || last < first) continue
+                if (first <= 0 || last < first) { broken.add(i + 1); continue }
                 out.add(Part(i + 1, first, last - first + 1, -1))
             }
             return out
@@ -261,7 +262,13 @@ object PartitionRepair {
             val type = sector0[base + 4].toInt() and 0xFF
             val start = le32(sector0, base + 8)
             val count = le32(sector0, base + 12)
-            if (type == 0 || start <= 0 || count <= 0 || start >= device.totalBlocks) continue
+            val blank = (0 until 16).all { sector0[base + it] == 0.toByte() }
+            if (type == 0 || start <= 0 || count <= 0 || start >= device.totalBlocks) {
+                // A non-blank entry with impossible geometry is corruption, not an
+                // empty slot: report it instead of silently dropping it.
+                if (!blank) broken.add(i + 1)
+                continue
+            }
             if (type in setOf(0x05, 0x0F, 0x85)) {
                 readLogicalPartitions(device, start, out)
             } else {
@@ -270,6 +277,7 @@ object PartitionRepair {
         }
         return out
     }
+
 
     /** Follows the EBR chain used by MBR logical partitions. */
     private fun readLogicalPartitions(device: BlockDevice, extendedStart: Long, out: MutableList<Part>) {
