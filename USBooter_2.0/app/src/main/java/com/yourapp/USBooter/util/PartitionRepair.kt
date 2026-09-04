@@ -1174,6 +1174,18 @@ object PartitionRepair {
         put("findings", JSONArray())
     }
 
+    /** First bytes of a sector as hex, so a real damaged drive can be diagnosed from the report. */
+    private fun hexDump(sector: ByteArray, count: Int = 32): String {
+        val n = minOf(count, sector.size)
+        val sb = StringBuilder(n * 3)
+        for (i in 0 until n) {
+            if (i > 0) sb.append(' ')
+            sb.append("%02X".format(sector[i].toInt() and 0xFF))
+        }
+        return sb.toString()
+    }
+
+
     private inline fun withDrive(
         context: Context,
         deviceName: String,
