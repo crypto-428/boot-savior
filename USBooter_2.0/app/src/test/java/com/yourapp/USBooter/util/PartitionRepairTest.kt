@@ -81,6 +81,23 @@ class PartitionRepairTest {
     }
 
     @Test
+    fun `successful repair stays applied when usb controller rejects cache flush`() {
+        val source = DriveImages.healthyNtfsDrive()
+        val device = FakeBlockDevice(source.totalBlocks, failCacheFlush = true)
+        device.put(0, source.sector(0))
+        device.put(PART_START, source.sector(PART_START))
+        device.put(PART_START + PART_SECTORS - 1, ByteArray(512))
+
+        val repair = PartitionRepair.repairDevice(device, allowRisky = false)
+
+        assertEquals(1, repair.getInt("appliedCount"))
+        assertTrue(finding(repair, "ntfs-copy-1").getBoolean("applied"))
+        assertArrayEquals(device.sector(PART_START), device.sector(PART_START + PART_SECTORS - 1))
+        assertTrue(device.cacheFlushes > 0)
+        assertEquals(listOf("clean"), ids(PartitionRepair.scanDevice(device)))
+    }
+
+    @Test
     fun `wrong mbr type byte is corrected in place`() {
         val device = DriveImages.healthyNtfsDrive()
         device.put(0, DriveImages.mbr(type = 0x0C))
