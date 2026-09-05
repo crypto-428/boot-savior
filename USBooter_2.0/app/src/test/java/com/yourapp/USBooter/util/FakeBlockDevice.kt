@@ -9,7 +9,8 @@ package com.yourapp.USBooter.util
  */
 class FakeBlockDevice(
     override val totalBlocks: Long,
-    override val blockSize: Int = 512
+    override val blockSize: Int = 512,
+    private val failCacheFlush: Boolean = false
 ) : BlockDevice {
 
     private val sectors = HashMap<Long, ByteArray>()
@@ -36,6 +37,7 @@ class FakeBlockDevice(
 
     override fun synchronizeCache() {
         cacheFlushes++
+        if (failCacheFlush) throw java.io.IOException("SCSI SYNCHRONIZE CACHE unsupported")
     }
 
     fun sector(lba: Long): ByteArray = readBlocks(lba, 1)

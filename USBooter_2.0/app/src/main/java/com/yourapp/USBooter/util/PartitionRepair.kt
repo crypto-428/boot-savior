@@ -209,7 +209,6 @@ object PartitionRepair {
                         val s = device.readBlocks(0, 1)
                         put32(s, 446 + index * 16 + 12, device.totalBlocks - part.start)
                         device.writeBlocks(0, s)
-                        device.synchronizeCache()
                     }
                 )
             }
@@ -641,7 +640,6 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(part.start, fat32Backup)
-                    device.synchronizeCache()
                 }
             )
             return
@@ -657,7 +655,6 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(part.start, device.readBlocks(part.start + 12, 12))
-                    device.synchronizeCache()
                 }
             )
             return
@@ -673,7 +670,6 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(part.start, ntfsCopy)
-                    device.synchronizeCache()
                 }
             )
             return
@@ -820,7 +816,6 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(part.start, copy!!)
-                    device.synchronizeCache()
                 }
             )
             return
@@ -840,9 +835,11 @@ object PartitionRepair {
                             "repair: copy anything you can still read off the drive first.",
                         "risky", repairable = true
                     ) {
-                        device.writeBlocks(part.start, rebuilt)
+                        // Write the backup first. If that write fails, the known-bad
+                        // main sector is left untouched instead of creating a pair
+                        // that looks half repaired on the next scan.
                         device.writeBlocks(copyLba, rebuilt)
-                        device.synchronizeCache()
+                        device.writeBlocks(part.start, rebuilt)
                     }
                 )
             } else {
@@ -871,7 +868,6 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(copyLba, boot)
-                    device.synchronizeCache()
                 }
             )
         }
@@ -891,7 +887,6 @@ object PartitionRepair {
                     "safe", repairable = true
                 ) {
                     device.writeBlocks(copyLba, boot)
-                    device.synchronizeCache()
                 }
             )
         }
@@ -909,9 +904,10 @@ object PartitionRepair {
                 ) {
                     val fixed = boot.copyOf()
                     put64(fixed, 40, part.sectors - 1)
-                    device.writeBlocks(part.start, fixed)
+                    // Keep the valid main sector as the recovery source until its
+                    // more failure-prone end-of-partition copy has been written.
                     device.writeBlocks(part.start + part.sectors - 1, fixed)
-                    device.synchronizeCache()
+                    device.writeBlocks(part.start, fixed)
                 }
             )
         }
