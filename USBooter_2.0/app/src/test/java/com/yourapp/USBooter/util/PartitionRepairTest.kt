@@ -86,6 +86,8 @@ class PartitionRepairTest {
         val device = FakeBlockDevice(source.totalBlocks, failCacheFlush = true)
         device.put(0, source.sector(0))
         device.put(PART_START, source.sector(PART_START))
+        device.put(PART_START + 100 * 8, source.sector(PART_START + 100 * 8))
+        device.put(PART_START + 200 * 8, source.sector(PART_START + 200 * 8))
         device.put(PART_START + PART_SECTORS - 1, ByteArray(512))
 
         val repair = PartitionRepair.repairDevice(device, allowRisky = false)
