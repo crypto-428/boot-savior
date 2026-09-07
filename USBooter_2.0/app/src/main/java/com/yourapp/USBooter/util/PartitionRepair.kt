@@ -46,17 +46,77 @@ object PartitionRepair {
         }
     }
 
-    /** Scans without touching the drive. */
+    /** Scans without touching the drive. [deep] reads every sector of the drive. */
     fun scan(
         context: Context,
         deviceName: String,
+        deep: Boolean = false,
+        isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
-        val inspected = mutableListOf<String>()
-        val layout = mutableListOf<JSONObject>()
-        val findings = analyze(device, progress, inspected, layout)
-        result(findings, applied = 0, repaired = false, inspected = inspected, layout = layout)
+        scanDevice(device, deep, isCancelled, progress)
     }
+
+    /**
+     * Last resort: throws away the partition table and every file on the drive and
+     * writes a brand new table and filesystem. Only reachable after a deep scan and
+     * an explicit confirmation in the UI, because all data is lost.
+     */
+    fun destructiveRebuild(
+        context: Context,
+        deviceName: String,
+        filesystem: String,
+        label: String,
+        progress: (Int, String) -> Unit
+    ): JSONObject = withUsbDrive(context, deviceName) { device ->
+        val fs = when (filesystem.uppercase()) {
+            "NTFS" -> Filesystem.NTFS
+            "EXFAT" -> Filesystem.EXFAT
+            else -> Filesystem.FAT32
+        }
+        progress(5, "Erasing the old partition table")
+        val alignment = (1024 * 1024 / device.blockSize).coerceAtLeast(1).toLong()
+        val start = alignment
+        val sectors = device.totalBlocks - start
+        require(sectors > 0) { "The drive is too small to rebuild" }
+        // Wipe the first megabyte so no stale table, GPT header or boot sector survives.
+        val zero = ByteArray(device.blockSize)
+        for (lba in 0 until minOf(alignment, device.totalBlocks)) {
+            runCatching { device.writeBlocks(lba, zero) }
+        }
+        progress(20, "Writing a new partition table")
+        Mbr.write(
+            device,
+            listOf(MbrPartitionEntry(start, sectors, fs, isESP = false, bootable = true)),
+            installBootCode = true
+        )
+        progress(40, "Creating a new ${fs.displayName} filesystem")
+        when (fs) {
+            Filesystem.FAT32 -> Fat32Formatter.format(device, start, sectors, label)
+            Filesystem.EXFAT -> ExfatFormatter.format(device, start, sectors, label)
+            Filesystem.NTFS -> NtfsFormatter.format(device, start, sectors, label)
+        }
+        progress(90, "Flushing the drive cache")
+        runCatching { device.synchronizeCache() }
+        progress(95, "Re-checking the rebuilt drive")
+        val verify = scanDevice(device, deep = false, isCancelled = { false }) { _, _ -> }
+        progress(100, "Rebuild finished")
+        JSONObject().apply {
+            put("ok", verify.optBoolean("ok", false))
+            put("destructive", true)
+            put("filesystem", fs.displayName)
+            put("startLba", start)
+            put("sizeSectors", sectors)
+            put("findings", verify.optJSONArray("findings") ?: JSONArray())
+            put("layout", verify.optJSONArray("layout") ?: JSONArray())
+            put(
+                "summary",
+                "The drive was rebuilt from scratch with a new ${fs.displayName} filesystem - all previous files are gone"
+            )
+        }
+    }
+
+
 
     /**
      * Scans and applies every safe repair. Risky repairs are applied only when
@@ -66,33 +126,234 @@ object PartitionRepair {
         context: Context,
         deviceName: String,
         allowRisky: Boolean,
+        deep: Boolean = false,
+        isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
-        repairDevice(device, allowRisky, progress)
+        repairDevice(device, allowRisky, deep, isCancelled, progress)
     }
+
 
     /** Scan against any block target. Used by the USB path above and by unit tests. */
     fun scanDevice(
         device: BlockDevice,
+        deep: Boolean = false,
+        isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
         val inspected = mutableListOf<String>()
         val layout = mutableListOf<JSONObject>()
+        val findings = analyze(device, { p, d -> progress(if (deep) p * 30 / 100 else p, d) }, inspected, layout)
+        val surface = if (deep) {
+            deepScan(device, isCancelled) { p, d -> progress(30 + p * 68 / 100, d) }
+        } else null
+        applySurface(device, findings, inspected, layout, surface)
+        progress(100, if (deep) "Full drive scan finished" else "Quick check finished")
         return result(
-            analyze(device, progress, inspected, layout),
-            applied = 0, repaired = false, inspected = inspected, layout = layout
+            findings, applied = 0, repaired = false,
+            inspected = inspected, layout = layout, surface = surface
         )
     }
+
+    /** What a full-surface sweep learned about the drive. */
+    class Surface(val totalSectors: Long, val blockSize: Int) {
+        var sectorsRead = 0L
+        var cancelled = false
+        /** Ranges of sectors the drive refused to return, as "first-last". */
+        val badRanges = mutableListOf<Pair<Long, Long>>()
+        var badSectors = 0L
+        /** Filesystem boot sectors found anywhere on the drive: LBA to name. */
+        val filesystems = mutableListOf<Pair<Long, String>>()
+        /** Number of valid NTFS file records seen, which proves file metadata survives. */
+        var fileRecords = 0L
+        var firstFileRecord = -1L
+    }
+
+    /**
+     * Reads every sector of the drive in bounded windows, looking for filesystem
+     * boot sectors and NTFS file records that the header-only check cannot see, and
+     * recording exactly which sectors the drive refuses to return. Memory use stays
+     * at one window regardless of drive size.
+     */
+    fun deepScan(
+        device: BlockDevice,
+        isCancelled: () -> Boolean = { false },
+        progress: (Int, String) -> Unit = { _, _ -> }
+    ): Surface {
+        val surface = Surface(device.totalBlocks, device.blockSize)
+        val window = (4 * 1024 * 1024 / device.blockSize).coerceAtLeast(1)
+        var lba = 0L
+        var lastPct = -1
+        while (lba < device.totalBlocks) {
+            if (isCancelled()) {
+                surface.cancelled = true
+                break
+            }
+            val take = minOf(window.toLong(), device.totalBlocks - lba).toInt()
+            val data = readBestEffort(device, lba, take, surface)
+            if (data != null) inspectWindow(data, lba, device.blockSize, surface)
+            surface.sectorsRead += take
+            lba += take
+            val pct = ((surface.sectorsRead * 100) / device.totalBlocks.coerceAtLeast(1)).toInt()
+            if (pct != lastPct) {
+                lastPct = pct
+                progress(
+                    pct,
+                    "Reading the whole drive: $pct% (${surface.filesystems.size} filesystem trace(s), " +
+                        "${surface.badSectors} unreadable sector(s))"
+                )
+            }
+        }
+        return surface
+    }
+
+    /**
+     * Reads [count] sectors; when the drive errors, halves the request down to single
+     * sectors so the exact bad sectors are recorded instead of writing off the region.
+     */
+    private fun readBestEffort(
+        device: BlockDevice,
+        lba: Long,
+        count: Int,
+        surface: Surface
+    ): ByteArray? {
+        val direct = runCatching { device.readBlocks(lba, count) }.getOrNull()
+        if (direct != null) return direct
+        if (count == 1) {
+            surface.badSectors++
+            val last = surface.badRanges.lastOrNull()
+            if (last != null && last.second == lba - 1) {
+                surface.badRanges[surface.badRanges.size - 1] = last.first to lba
+            } else if (surface.badRanges.size < 200) {
+                surface.badRanges.add(lba to lba)
+            }
+            return null
+        }
+        val half = count / 2
+        val a = readBestEffort(device, lba, half, surface)
+        val b = readBestEffort(device, lba + half, count - half, surface)
+        if (a == null && b == null) return null
+        val out = ByteArray(count * device.blockSize)
+        a?.copyInto(out, 0)
+        b?.copyInto(out, half * device.blockSize)
+        return out
+    }
+
+    /** Looks for boot sectors and NTFS file records inside one already-read window. */
+    private fun inspectWindow(data: ByteArray, baseLba: Long, blockSize: Int, surface: Surface) {
+        var offset = 0
+        var sector = baseLba
+        while (offset + blockSize <= data.size) {
+            val fs = filesystemOfAt(data, offset)
+            if (fs != null && surface.filesystems.size < 64) surface.filesystems.add(sector to fs)
+            if (isFileRecordAt(data, offset, blockSize)) {
+                surface.fileRecords++
+                if (surface.firstFileRecord < 0) surface.firstFileRecord = sector
+            }
+            offset += blockSize
+            sector++
+        }
+    }
+
+    /** Turns a surface sweep into findings and honest report lines. */
+    private fun applySurface(
+        device: BlockDevice,
+        findings: MutableList<Finding>,
+        inspected: MutableList<String>,
+        layout: MutableList<JSONObject>,
+        surface: Surface?
+    ) {
+        if (surface == null) {
+            inspected += "Quick check only: the partition table and boot sectors were read, not the whole drive. " +
+                "Use the full drive scan to read every sector."
+            return
+        }
+        inspected += "Full drive scan: ${surface.sectorsRead} of ${surface.totalSectors} sectors read" +
+            (if (surface.cancelled) " (cancelled early)" else "")
+        inspected += "Full drive scan: ${surface.badSectors} unreadable sector(s), " +
+            "${surface.filesystems.size} filesystem trace(s), ${surface.fileRecords} file record(s)"
+        surface.filesystems.take(16).forEach { (lba, fs) ->
+            inspected += "Found a $fs boot sector at sector $lba"
+        }
+        surface.badRanges.take(20).forEach { (from, to) ->
+            inspected += "Unreadable sectors $from to $to"
+        }
+
+        if (surface.badSectors > 0) {
+            findings.add(
+                Finding(
+                    "surface-bad-sectors",
+                    "${surface.badSectors} sector(s) on this drive cannot be read",
+                    "The drive refused to return ${surface.badSectors} sector(s) during the full scan. That is failing " +
+                        "hardware, not a damaged partition table, so no repair can bring those sectors back. Copy anything " +
+                        "still readable off the drive and replace it.",
+                    "risky", repairable = false
+                )
+            )
+        }
+
+        val known = layout.map { it.optLong("startLba", -1L) }.toSet()
+        surface.filesystems.filter { it.first !in known }.take(4).forEach { (lba, fs) ->
+            findings.add(
+                Finding(
+                    "surface-orphan-${lba}",
+                    "A $fs filesystem at sector $lba is missing from the partition table",
+                    "The full scan found a working $fs boot sector at sector $lba, but the partition table does not list it. " +
+                        "Adding an entry that points at it usually makes the files visible again, and it rewrites the table only.",
+                    "safe", repairable = true
+                ) {
+                    val s = device.readBlocks(0, 1)
+                    val slot = (0 until 4).firstOrNull { i ->
+                        (0 until 16).all { s[446 + i * 16 + it].toInt() == 0 }
+                    } ?: 0
+                    val base = 446 + slot * 16
+                    s[base] = 0x80.toByte()
+                    s[base + 4] = when (fs) {
+                        "NTFS" -> 0x07
+                        "exFAT" -> 0x07
+                        else -> 0x0C
+                    }
+                    put32(s, base + 8, lba)
+                    put32(s, base + 12, device.totalBlocks - lba)
+                    s[510] = 0x55
+                    s[511] = 0xAA.toByte()
+                    device.writeBlocks(0, s)
+                }
+            )
+        }
+
+        if (surface.badSectors > 0 || surface.cancelled) {
+            findings.removeAll { it.id == "clean" }
+        }
+        if (findings.isEmpty()) {
+            findings.add(
+                Finding(
+                    "clean",
+                    "No partition damage found",
+                    "Every sector of this drive was read and the partition table and filesystems are consistent.",
+                    "info", repairable = false
+                )
+            )
+        }
+    }
+
 
     /** Repair against any block target. Used by the USB path above and by unit tests. */
     fun repairDevice(
         device: BlockDevice,
         allowRisky: Boolean,
+        deep: Boolean = false,
+        isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
         val inspected = mutableListOf<String>()
         val layout = mutableListOf<JSONObject>()
-        val findings = analyze(device, progress, inspected, layout)
+        val findings = analyze(device, { p, d -> progress(if (deep) p / 3 else p, d) }, inspected, layout)
+        val surface = if (deep) {
+            deepScan(device, isCancelled) { p, d -> progress(20 + p * 45 / 100, d) }
+        } else null
+        applySurface(device, findings, inspected, layout, surface)
+
 
         val todo = findings.filter {
             it.repairable && it.fix != null && (it.severity == "safe" || allowRisky)
@@ -116,7 +377,11 @@ object PartitionRepair {
             runCatching { device.synchronizeCache() }
         }
         progress(100, "Repair finished")
-        return result(findings, applied, repaired = true, inspected = inspected, layout = layout)
+        return result(
+            findings, applied, repaired = true,
+            inspected = inspected, layout = layout, surface = surface
+        )
+
     }
 
     // ---------------------------------------------------------------- analysis
@@ -956,8 +1221,30 @@ object PartitionRepair {
         val lba = part.start + le64(boot, offset) * clusterSectors
         if (lba <= part.start || lba >= device.totalBlocks) return false
         val record = runCatching { device.readBlocks(lba, 1) }.getOrNull() ?: return false
-        return String(record, 0, 4, Charsets.US_ASCII) == "FILE"
+        return isFileRecordAt(record, 0, device.blockSize)
     }
+
+    /**
+     * A real NTFS file record, not just the four magic bytes: the update-sequence
+     * array has to sit inside the record and the record length has to be sane. Cheap
+     * enough to run on every sector of the drive, strict enough that stray text
+     * containing "FILE" is not mistaken for surviving file metadata.
+     */
+    private fun isFileRecordAt(data: ByteArray, offset: Int, blockSize: Int): Boolean {
+        if (offset + 48 > data.size) return false
+        if (String(data, offset, 4, Charsets.US_ASCII) != "FILE") return false
+        val usaOffset = le16(data, offset + 4)
+        val usaCount = le16(data, offset + 6)
+        val allocated = le32(data, offset + 28)
+        val used = le32(data, offset + 24)
+        if (usaOffset < 42 || usaOffset > 128 || usaCount < 1 || usaCount > 32) return false
+        if (usaOffset + usaCount * 2 > blockSize) return false
+        if (allocated < 42 || allocated > 65536L) return false
+        if (used < 42 || used > allocated) return false
+        val attributesOffset = le16(data, offset + 20)
+        return attributesOffset >= usaOffset + usaCount * 2 && attributesOffset < allocated
+    }
+
 
 
     /** The NTFS safety copy: the last sector of the partition, or one sector past it. */
@@ -1089,6 +1376,24 @@ object PartitionRepair {
         return null
     }
 
+    /** [filesystemOf] applied to one sector inside a bigger buffer, without copying it. */
+    private fun filesystemOfAt(data: ByteArray, offset: Int): String? {
+        if (offset + 512 > data.size) return null
+        val oem = String(data, offset + 3, 8, Charsets.US_ASCII)
+        if (oem == "EXFAT   ") return "exFAT"
+        if (oem == "NTFS    ") return "NTFS"
+        if ((data[offset + 510].toInt() and 0xFF) != 0x55 ||
+            (data[offset + 511].toInt() and 0xFF) != 0xAA
+        ) return null
+        val fat32Id = String(data, offset + 82, 8, Charsets.US_ASCII).trim()
+        if (fat32Id.startsWith("FAT32")) return "FAT32"
+        val fat16Id = String(data, offset + 54, 8, Charsets.US_ASCII).trim()
+        if (fat16Id.startsWith("FAT")) return "FAT16"
+        return null
+    }
+
+
+
     private fun exfatChecksum(region: ByteArray, blockSize: Int): Long {
         var sum = 0L
         for (i in region.indices) {
@@ -1134,7 +1439,8 @@ object PartitionRepair {
         applied: Int,
         repaired: Boolean,
         inspected: List<String> = emptyList(),
-        layout: List<JSONObject> = emptyList()
+        layout: List<JSONObject> = emptyList(),
+        surface: Surface? = null
     ): JSONObject {
         val problems = findings.filter { it.severity != "info" }
         val safe = problems.count { it.severity == "safe" }
@@ -1150,6 +1456,27 @@ object PartitionRepair {
             put("findings", JSONArray().apply { findings.forEach { put(it.toJson()) } })
             put("inspected", JSONArray().apply { inspected.forEach { put(it) } })
             put("layout", JSONArray().apply { layout.forEach { put(it) } })
+            put("deep", surface != null)
+            if (surface != null) {
+                put("sectorsScanned", surface.sectorsRead)
+                put("totalSectors", surface.totalSectors)
+                put("badSectors", surface.badSectors)
+                put("fileRecords", surface.fileRecords)
+                put("cancelled", surface.cancelled)
+                put(
+                    "badRanges",
+                    JSONArray().apply { surface.badRanges.forEach { put("${it.first}-${it.second}") } }
+                )
+                put(
+                    "found",
+                    JSONArray().apply {
+                        surface.filesystems.forEach {
+                            put(JSONObject().put("startLba", it.first).put("filesystem", it.second))
+                        }
+                    }
+                )
+            }
+
             put(
                 "summary",
                 when {
