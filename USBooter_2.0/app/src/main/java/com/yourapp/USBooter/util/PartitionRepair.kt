@@ -339,11 +339,18 @@ object PartitionRepair {
     fun repairDevice(
         device: BlockDevice,
         allowRisky: Boolean,
+        deep: Boolean = false,
+        isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
         val inspected = mutableListOf<String>()
         val layout = mutableListOf<JSONObject>()
-        val findings = analyze(device, progress, inspected, layout)
+        val findings = analyze(device, { p, d -> progress(if (deep) p / 3 else p, d) }, inspected, layout)
+        val surface = if (deep) {
+            deepScan(device, isCancelled) { p, d -> progress(20 + p * 45 / 100, d) }
+        } else null
+        applySurface(device, findings, inspected, layout, surface)
+
 
         val todo = findings.filter {
             it.repairable && it.fix != null && (it.severity == "safe" || allowRisky)
