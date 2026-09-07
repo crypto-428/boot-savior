@@ -1376,6 +1376,24 @@ object PartitionRepair {
         return null
     }
 
+    /** [filesystemOf] applied to one sector inside a bigger buffer, without copying it. */
+    private fun filesystemOfAt(data: ByteArray, offset: Int): String? {
+        if (offset + 512 > data.size) return null
+        val oem = String(data, offset + 3, 8, Charsets.US_ASCII)
+        if (oem == "EXFAT   ") return "exFAT"
+        if (oem == "NTFS    ") return "NTFS"
+        if ((data[offset + 510].toInt() and 0xFF) != 0x55 ||
+            (data[offset + 511].toInt() and 0xFF) != 0xAA
+        ) return null
+        val fat32Id = String(data, offset + 82, 8, Charsets.US_ASCII).trim()
+        if (fat32Id.startsWith("FAT32")) return "FAT32"
+        val fat16Id = String(data, offset + 54, 8, Charsets.US_ASCII).trim()
+        if (fat16Id.startsWith("FAT")) return "FAT16"
+        return null
+    }
+
+
+
     private fun exfatChecksum(region: ByteArray, blockSize: Int): Long {
         var sum = 0L
         for (i in region.indices) {
