@@ -1221,8 +1221,30 @@ object PartitionRepair {
         val lba = part.start + le64(boot, offset) * clusterSectors
         if (lba <= part.start || lba >= device.totalBlocks) return false
         val record = runCatching { device.readBlocks(lba, 1) }.getOrNull() ?: return false
-        return String(record, 0, 4, Charsets.US_ASCII) == "FILE"
+        return isFileRecordAt(record, 0, device.blockSize)
     }
+
+    /**
+     * A real NTFS file record, not just the four magic bytes: the update-sequence
+     * array has to sit inside the record and the record length has to be sane. Cheap
+     * enough to run on every sector of the drive, strict enough that stray text
+     * containing "FILE" is not mistaken for surviving file metadata.
+     */
+    private fun isFileRecordAt(data: ByteArray, offset: Int, blockSize: Int): Boolean {
+        if (offset + 48 > data.size) return false
+        if (String(data, offset, 4, Charsets.US_ASCII) != "FILE") return false
+        val usaOffset = le16(data, offset + 4)
+        val usaCount = le16(data, offset + 6)
+        val allocated = le32(data, offset + 28)
+        val used = le32(data, offset + 24)
+        if (usaOffset < 42 || usaOffset > 128 || usaCount < 1 || usaCount > 32) return false
+        if (usaOffset + usaCount * 2 > blockSize) return false
+        if (allocated < 42 || allocated > 65536L) return false
+        if (used < 42 || used > allocated) return false
+        val attributesOffset = le16(data, offset + 20)
+        return attributesOffset >= usaOffset + usaCount * 2 && attributesOffset < allocated
+    }
+
 
 
     /** The NTFS safety copy: the last sector of the partition, or one sector past it. */
