@@ -46,17 +46,77 @@ object PartitionRepair {
         }
     }
 
-    /** Scans without touching the drive. */
+    /** Scans without touching the drive. [deep] reads every sector of the drive. */
     fun scan(
         context: Context,
         deviceName: String,
+        deep: Boolean = false,
+        isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
-        val inspected = mutableListOf<String>()
-        val layout = mutableListOf<JSONObject>()
-        val findings = analyze(device, progress, inspected, layout)
-        result(findings, applied = 0, repaired = false, inspected = inspected, layout = layout)
+        scanDevice(device, deep, isCancelled, progress)
     }
+
+    /**
+     * Last resort: throws away the partition table and every file on the drive and
+     * writes a brand new table and filesystem. Only reachable after a deep scan and
+     * an explicit confirmation in the UI, because all data is lost.
+     */
+    fun destructiveRebuild(
+        context: Context,
+        deviceName: String,
+        filesystem: String,
+        label: String,
+        progress: (Int, String) -> Unit
+    ): JSONObject = withUsbDrive(context, deviceName) { device ->
+        val fs = when (filesystem.uppercase()) {
+            "NTFS" -> Filesystem.NTFS
+            "EXFAT" -> Filesystem.EXFAT
+            else -> Filesystem.FAT32
+        }
+        progress(5, "Erasing the old partition table")
+        val alignment = (1024 * 1024 / device.blockSize).coerceAtLeast(1).toLong()
+        val start = alignment
+        val sectors = device.totalBlocks - start
+        require(sectors > 0) { "The drive is too small to rebuild" }
+        // Wipe the first megabyte so no stale table, GPT header or boot sector survives.
+        val zero = ByteArray(device.blockSize)
+        for (lba in 0 until minOf(alignment, device.totalBlocks)) {
+            runCatching { device.writeBlocks(lba, zero) }
+        }
+        progress(20, "Writing a new partition table")
+        Mbr.write(
+            device,
+            listOf(MbrPartitionEntry(start, sectors, fs, isESP = false, bootable = true)),
+            installBootCode = true
+        )
+        progress(40, "Creating a new ${fs.displayName} filesystem")
+        when (fs) {
+            Filesystem.FAT32 -> Fat32Formatter.format(device, start, sectors, label)
+            Filesystem.EXFAT -> ExfatFormatter.format(device, start, sectors, label)
+            Filesystem.NTFS -> NtfsFormatter.format(device, start, sectors, label)
+        }
+        progress(90, "Flushing the drive cache")
+        runCatching { device.synchronizeCache() }
+        progress(95, "Re-checking the rebuilt drive")
+        val verify = scanDevice(device, deep = false, isCancelled = { false }) { _, _ -> }
+        progress(100, "Rebuild finished")
+        JSONObject().apply {
+            put("ok", verify.optBoolean("ok", false))
+            put("destructive", true)
+            put("filesystem", fs.displayName)
+            put("startLba", start)
+            put("sizeSectors", sectors)
+            put("findings", verify.optJSONArray("findings") ?: JSONArray())
+            put("layout", verify.optJSONArray("layout") ?: JSONArray())
+            put(
+                "summary",
+                "The drive was rebuilt from scratch with a new ${fs.displayName} filesystem - all previous files are gone"
+            )
+        }
+    }
+
+
 
     /**
      * Scans and applies every safe repair. Risky repairs are applied only when
