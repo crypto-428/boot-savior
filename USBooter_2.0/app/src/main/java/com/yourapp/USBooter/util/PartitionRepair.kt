@@ -1439,7 +1439,8 @@ object PartitionRepair {
         applied: Int,
         repaired: Boolean,
         inspected: List<String> = emptyList(),
-        layout: List<JSONObject> = emptyList()
+        layout: List<JSONObject> = emptyList(),
+        surface: Surface? = null
     ): JSONObject {
         val problems = findings.filter { it.severity != "info" }
         val safe = problems.count { it.severity == "safe" }
@@ -1455,6 +1456,27 @@ object PartitionRepair {
             put("findings", JSONArray().apply { findings.forEach { put(it.toJson()) } })
             put("inspected", JSONArray().apply { inspected.forEach { put(it) } })
             put("layout", JSONArray().apply { layout.forEach { put(it) } })
+            put("deep", surface != null)
+            if (surface != null) {
+                put("sectorsScanned", surface.sectorsRead)
+                put("totalSectors", surface.totalSectors)
+                put("badSectors", surface.badSectors)
+                put("fileRecords", surface.fileRecords)
+                put("cancelled", surface.cancelled)
+                put(
+                    "badRanges",
+                    JSONArray().apply { surface.badRanges.forEach { put("${it.first}-${it.second}") } }
+                )
+                put(
+                    "found",
+                    JSONArray().apply {
+                        surface.filesystems.forEach {
+                            put(JSONObject().put("startLba", it.first).put("filesystem", it.second))
+                        }
+                    }
+                )
+            }
+
             put(
                 "summary",
                 when {
