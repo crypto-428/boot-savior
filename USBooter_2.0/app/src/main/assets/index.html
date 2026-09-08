@@ -1373,6 +1373,7 @@
           <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="repair_title">Partition repair</div>
           <div id="repairSummary" style="font-size:12px;color:var(--text-muted);"></div>
           <div id="repairChecks" style="margin-top:6px;"></div>
+        <div id="repairScanned" style="display:none;text-align:left;margin-top:8px;font-size:11px;opacity:.8;"></div>
         <div id="repairInspected" style="display:none;text-align:left;margin-top:8px;"></div>
           <div id="repairLayoutBox" style="display:none;text-align:left;margin-top:10px;">
             <div id="repairLayoutList"></div>
@@ -1385,8 +1386,16 @@
           <button class="btn danger" id="repairRiskyBtn" onclick="confirmRiskyRepair()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_risky">Repair anyway (files may be lost)</button>
         </div>
 
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12px;color:var(--text-muted);text-align:left;">
+          <input type="checkbox" id="repairDeep" checked>
+          <span data-i18n="repair_deep">Scan the whole drive, sector by sector (slower, finds damage the quick check misses)</span>
+        </label>
+
         <button class="btn primary" id="repairStartBtn" onclick="scanPartitions()" style="width:100%;margin-top:12px;" data-i18n="repair_scan">Check &amp; repair partitions (no data loss)</button>
+        <button class="btn" id="repairCancelBtn" onclick="cancelRepairScan()" style="display:none;width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_stop_scan">■ Stop scanning</button>
         <button class="btn" onclick="exportReport()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="export_report">Export verification report</button>
+        <button class="btn danger" id="repairWipeBtn" onclick="confirmDestructiveRebuild()" style="width:100%;margin-top:16px;" data-i18n="repair_wipe">⚠ Last resort: rebuild the drive and erase all files</button>
+
       </div>
 
       <div class="btnrow" style="flex-wrap:wrap;">
@@ -2341,8 +2350,24 @@
     repairBusy = busy;
     const start = document.getElementById('repairStartBtn');
     if (start) { start.disabled = busy; start.textContent = busy ? t('repair_busy') : t('repair_scan'); }
+    const stop = document.getElementById('repairCancelBtn');
+    if (stop) { stop.style.display = busy ? '' : 'none'; stop.disabled = false; }
+    const wipe = document.getElementById('repairWipeBtn');
+    if (wipe) wipe.disabled = busy;
     document.getElementById('repairApplyBtn').style.display = 'none';
     document.getElementById('repairRiskyBtn').style.display = 'none';
+  }
+
+  function deepRequested() {
+    const el = document.getElementById('repairDeep');
+    return !!(el && el.checked);
+  }
+
+  function cancelRepairScan() {
+    if (window.Android && Android.cancelRepairScan) Android.cancelRepairScan();
+    const stop = document.getElementById('repairCancelBtn');
+    if (stop) stop.disabled = true;
+    showToast(t('repair_stopping'));
   }
 
   function scanPartitions() {
@@ -2350,10 +2375,11 @@
     if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
     if (repairBusy) return;
     document.getElementById('repairCard').style.display = 'block';
-    document.getElementById('repairSummary').textContent = t('repair_scanning');
+    document.getElementById('repairSummary').textContent =
+      deepRequested() ? t('repair_scanning_deep') : t('repair_scanning');
     document.getElementById('repairChecks').innerHTML = '';
     setRepairBusy(true);
-    Android.scanPartitions(state.selectedDeviceName);
+    Android.scanPartitions(state.selectedDeviceName, deepRequested());
   }
 
   function repairPartitions(allowRisky) {
@@ -2361,7 +2387,7 @@
     if (repairBusy) return;
     document.getElementById('repairSummary').textContent = t('repair_running');
     setRepairBusy(true);
-    Android.repairPartitions(state.selectedDeviceName, !!allowRisky);
+    Android.repairPartitions(state.selectedDeviceName, !!allowRisky, deepRequested());
   }
 
   function confirmRiskyRepair() {
@@ -2371,6 +2397,49 @@
       '<button class="btn danger" onclick="closeModal(); repairPartitions(true);">' +
       t('repair_risky_go') + '</button>';
   }
+
+  // Destructive last resort: two separate confirmations, the second one typed.
+  function confirmDestructiveRebuild() {
+    if (!window.Android || !Android.rebuildDriveDestructively) { alert(t('repair_app_only')); return; }
+    if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
+    if (repairBusy) return;
+    showModal('\u26a0', t('repair_wipe_title'), t('repair_wipe_body'));
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn danger" onclick="closeModal(); confirmDestructiveRebuildStep2();">' +
+      t('repair_wipe_next') + '</button>';
+  }
+
+  function confirmDestructiveRebuildStep2() {
+    showModal('\u26a0', t('repair_wipe_title2'), t('repair_wipe_body2'));
+    document.getElementById('modalMessage').insertAdjacentHTML(
+      'beforeend',
+      '<div style="margin-top:10px;text-align:left">' +
+        '<div style="font-size:12px;opacity:.8;margin-bottom:4px;">' + t('repair_wipe_fs') + '</div>' +
+        '<select id="repairWipeFs" style="width:100%;padding:8px;">' +
+          '<option value="EXFAT">exFAT</option><option value="FAT32">FAT32</option>' +
+          '<option value="NTFS">NTFS</option></select>' +
+        '<input id="repairWipeConfirm" placeholder="' + t('type_wipe') + '" ' +
+          'style="width:100%;margin-top:8px;padding:8px;">' +
+      '</div>'
+    );
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn danger" onclick="startDestructiveRebuild()">' + t('wipe_drive') + '</button>';
+  }
+
+  function startDestructiveRebuild() {
+    const typed = (document.getElementById('repairWipeConfirm') || {}).value || '';
+    if (typed.trim().toUpperCase() !== 'WIPE') { showToast(t('repair_wipe_need_word')); return; }
+    const fs = (document.getElementById('repairWipeFs') || {}).value || 'EXFAT';
+    closeModal();
+    document.getElementById('repairCard').style.display = 'block';
+    document.getElementById('repairSummary').textContent = t('repair_wipe_running');
+    document.getElementById('repairChecks').innerHTML = '';
+    setRepairBusy(true);
+    Android.rebuildDriveDestructively(state.selectedDeviceName, fs, 'USBOOTER');
+  }
+
 
   function onRepairProgress(pct, detail) {
     const el = document.getElementById('repairSummary');
@@ -2403,6 +2472,35 @@
         '</span></div>';
     }).join('') || '<div style="font-size:12px;color:var(--text-muted);">' + t('repair_none') + '</div>';
 
+    // How much of the drive was actually read, so "no damage" is verifiable.
+    const scannedBox = document.getElementById('repairScanned');
+    if (scannedBox) {
+      const lines = [];
+      if (result.deep) {
+        const done = Number(result.sectorsScanned || 0);
+        const total = Number(result.totalSectors || 0);
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        lines.push(t('repair_scanned_sectors')
+          .replace('{done}', done.toLocaleString())
+          .replace('{total}', total.toLocaleString())
+          .replace('{pct}', pct));
+        lines.push(t('repair_bad_sectors').replace('{n}', Number(result.badSectors || 0)));
+        if (Number(result.fileRecords || 0) > 0) {
+          lines.push(t('repair_file_records').replace('{n}', Number(result.fileRecords)));
+        }
+        if (Array.isArray(result.badRanges) && result.badRanges.length) {
+          lines.push(t('repair_bad_ranges') + ' ' + result.badRanges.slice(0, 12).join(', '));
+        }
+        if (result.cancelled) lines.push(t('repair_scan_cancelled'));
+      } else {
+        lines.push(t('repair_quick_only'));
+      }
+      scannedBox.style.display = '';
+      scannedBox.innerHTML = lines.map(function (l) {
+        return '<div>\u2022 ' + escapeHtml(l) + '</div>';
+      }).join('');
+    }
+
     // Always show what was actually inspected, so a clean result is verifiable.
     const inspected = Array.isArray(result.inspected) ? result.inspected : [];
     const inspectedBox = document.getElementById('repairInspected');
@@ -2415,6 +2513,7 @@
           }).join('')
         : '';
     }
+
 
     // Detected on-disk geometry, offered as the layout to reuse when formatting.
     state.repairLayout = Array.isArray(result.layout) ? result.layout : [];
@@ -2442,9 +2541,16 @@
     document.getElementById('repairRiskyBtn').style.display = riskyPending ? '' : 'none';
     if (applied) {
       showToast(result.ok ? t('repair_done') : t('repair_partial'));
-      // Re-read the drive so the findings reflect the disk as it is now.
-      setTimeout(scanPartitions, 900);
+      // Re-read the drive so the findings reflect the disk as it is now. This
+      // re-check is always quick: a second full-drive pass would take minutes.
+      setTimeout(function () {
+        if (repairBusy || !window.Android || !Android.scanPartitions) return;
+        document.getElementById('repairSummary').textContent = t('repair_scanning');
+        setRepairBusy(true);
+        Android.scanPartitions(state.selectedDeviceName, false);
+      }, 900);
     }
+
   }
 
   function showToast(m) {

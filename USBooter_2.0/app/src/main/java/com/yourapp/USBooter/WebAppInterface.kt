@@ -296,22 +296,36 @@ class WebAppInterface(private val activity: MainActivity) {
         }
     }
 
+    /** Set by the UI to stop a running full-drive scan. */
+    @Volatile
+    private var repairCancelled = false
+
+    /** Asks a running scan or repair to stop as soon as the current window is done. */
+    @JavascriptInterface
+    fun cancelRepairScan() {
+        repairCancelled = true
+    }
+
     /**
      * Looks for partition-table and filesystem damage without writing a single
      * byte. Every finding says whether it can be repaired from a spare copy the
-     * drive already carries (safe) or only by guessing (risky).
+     * drive already carries (safe) or only by guessing (risky). When [deep] is
+     * true every sector of the drive is read, which is slow but complete.
      */
     @JavascriptInterface
-    fun scanPartitions(deviceName: String) {
+    fun scanPartitions(deviceName: String, deep: Boolean) {
         if (com.yourapp.USBooter.service.FormatService.isRunning) {
             showToast("A flash is running - wait for it to finish")
             return
         }
+        repairCancelled = false
         thread {
             val json = runCatching {
                 com.yourapp.USBooter.util.PartitionRepair.scan(
                     activity.applicationContext,
-                    deviceName
+                    deviceName,
+                    deep,
+                    { repairCancelled }
                 ) { pct, detail -> post("onRepairProgress($pct, ${quote(detail)})") }
             }.getOrElse {
                 JSONObject()
@@ -329,17 +343,20 @@ class WebAppInterface(private val activity: MainActivity) {
      * user has explicitly accepted the possible loss ([allowRisky]).
      */
     @JavascriptInterface
-    fun repairPartitions(deviceName: String, allowRisky: Boolean) {
+    fun repairPartitions(deviceName: String, allowRisky: Boolean, deep: Boolean) {
         if (com.yourapp.USBooter.service.FormatService.isRunning) {
             showToast("A flash is running - wait for it to finish")
             return
         }
+        repairCancelled = false
         thread {
             val json = runCatching {
                 com.yourapp.USBooter.util.PartitionRepair.repair(
                     activity.applicationContext,
                     deviceName,
-                    allowRisky
+                    allowRisky,
+                    deep,
+                    { repairCancelled }
                 ) { pct, detail -> post("onRepairProgress($pct, ${quote(detail)})") }
             }.getOrElse {
                 JSONObject()
@@ -351,6 +368,36 @@ class WebAppInterface(private val activity: MainActivity) {
             post("onRepairResult($json)")
         }
     }
+
+    /**
+     * Last resort. Wipes the drive, writes a fresh partition table and filesystem
+     * and loses every file. The UI must confirm this twice before calling it.
+     */
+    @JavascriptInterface
+    fun rebuildDriveDestructively(deviceName: String, filesystem: String, label: String) {
+        if (com.yourapp.USBooter.service.FormatService.isRunning) {
+            showToast("A flash is running - wait for it to finish")
+            return
+        }
+        thread {
+            val json = runCatching {
+                com.yourapp.USBooter.util.PartitionRepair.destructiveRebuild(
+                    activity.applicationContext,
+                    deviceName,
+                    filesystem,
+                    label
+                ) { pct, detail -> post("onRepairProgress($pct, ${quote(detail)})") }
+            }.getOrElse {
+                JSONObject()
+                    .put("ok", false)
+                    .put("destructive", true)
+                    .put("summary", "Drive rebuild failed: ${it.message ?: "unknown error"}")
+                    .put("findings", JSONArray())
+            }
+            post("onRepairResult($json)")
+        }
+    }
+
 
     private fun post(js: String) = activity.runOnUiThread {
         activity.webView.evaluateJavascript(js, null)
