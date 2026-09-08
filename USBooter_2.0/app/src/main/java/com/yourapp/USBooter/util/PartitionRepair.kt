@@ -68,7 +68,7 @@ object PartitionRepair {
         filesystem: String,
         label: String,
         progress: (Int, String) -> Unit
-    ): JSONObject = withUsbDrive(context, deviceName) { device ->
+    ): JSONObject = withDrive(context, deviceName) { device ->
         val fs = when (filesystem.uppercase()) {
             "NTFS" -> Filesystem.NTFS
             "EXFAT" -> Filesystem.EXFAT
