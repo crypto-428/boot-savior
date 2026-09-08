@@ -2541,9 +2541,16 @@
     document.getElementById('repairRiskyBtn').style.display = riskyPending ? '' : 'none';
     if (applied) {
       showToast(result.ok ? t('repair_done') : t('repair_partial'));
-      // Re-read the drive so the findings reflect the disk as it is now.
-      setTimeout(scanPartitions, 900);
+      // Re-read the drive so the findings reflect the disk as it is now. This
+      // re-check is always quick: a second full-drive pass would take minutes.
+      setTimeout(function () {
+        if (repairBusy || !window.Android || !Android.scanPartitions) return;
+        document.getElementById('repairSummary').textContent = t('repair_scanning');
+        setRepairBusy(true);
+        Android.scanPartitions(state.selectedDeviceName, false);
+      }, 900);
     }
+
   }
 
   function showToast(m) {
