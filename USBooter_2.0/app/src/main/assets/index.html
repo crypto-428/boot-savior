@@ -2472,6 +2472,35 @@
         '</span></div>';
     }).join('') || '<div style="font-size:12px;color:var(--text-muted);">' + t('repair_none') + '</div>';
 
+    // How much of the drive was actually read, so "no damage" is verifiable.
+    const scannedBox = document.getElementById('repairScanned');
+    if (scannedBox) {
+      const lines = [];
+      if (result.deep) {
+        const done = Number(result.sectorsScanned || 0);
+        const total = Number(result.totalSectors || 0);
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        lines.push(t('repair_scanned_sectors')
+          .replace('{done}', done.toLocaleString())
+          .replace('{total}', total.toLocaleString())
+          .replace('{pct}', pct));
+        lines.push(t('repair_bad_sectors').replace('{n}', Number(result.badSectors || 0)));
+        if (Number(result.fileRecords || 0) > 0) {
+          lines.push(t('repair_file_records').replace('{n}', Number(result.fileRecords)));
+        }
+        if (Array.isArray(result.badRanges) && result.badRanges.length) {
+          lines.push(t('repair_bad_ranges') + ' ' + result.badRanges.slice(0, 12).join(', '));
+        }
+        if (result.cancelled) lines.push(t('repair_scan_cancelled'));
+      } else {
+        lines.push(t('repair_quick_only'));
+      }
+      scannedBox.style.display = '';
+      scannedBox.innerHTML = lines.map(function (l) {
+        return '<div>\u2022 ' + escapeHtml(l) + '</div>';
+      }).join('');
+    }
+
     // Always show what was actually inspected, so a clean result is verifiable.
     const inspected = Array.isArray(result.inspected) ? result.inspected : [];
     const inspectedBox = document.getElementById('repairInspected');
@@ -2484,6 +2513,7 @@
           }).join('')
         : '';
     }
+
 
     // Detected on-disk geometry, offered as the layout to reuse when formatting.
     state.repairLayout = Array.isArray(result.layout) ? result.layout : [];
