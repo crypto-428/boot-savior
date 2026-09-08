@@ -1373,6 +1373,7 @@
           <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="repair_title">Partition repair</div>
           <div id="repairSummary" style="font-size:12px;color:var(--text-muted);"></div>
           <div id="repairChecks" style="margin-top:6px;"></div>
+        <div id="repairScanned" style="display:none;text-align:left;margin-top:8px;font-size:11px;opacity:.8;"></div>
         <div id="repairInspected" style="display:none;text-align:left;margin-top:8px;"></div>
           <div id="repairLayoutBox" style="display:none;text-align:left;margin-top:10px;">
             <div id="repairLayoutList"></div>
@@ -1385,8 +1386,16 @@
           <button class="btn danger" id="repairRiskyBtn" onclick="confirmRiskyRepair()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_risky">Repair anyway (files may be lost)</button>
         </div>
 
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12px;color:var(--text-muted);text-align:left;">
+          <input type="checkbox" id="repairDeep" checked>
+          <span data-i18n="repair_deep">Scan the whole drive, sector by sector (slower, finds damage the quick check misses)</span>
+        </label>
+
         <button class="btn primary" id="repairStartBtn" onclick="scanPartitions()" style="width:100%;margin-top:12px;" data-i18n="repair_scan">Check &amp; repair partitions (no data loss)</button>
+        <button class="btn" id="repairCancelBtn" onclick="cancelRepairScan()" style="display:none;width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_stop_scan">■ Stop scanning</button>
         <button class="btn" onclick="exportReport()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="export_report">Export verification report</button>
+        <button class="btn danger" id="repairWipeBtn" onclick="confirmDestructiveRebuild()" style="width:100%;margin-top:16px;" data-i18n="repair_wipe">⚠ Last resort: rebuild the drive and erase all files</button>
+
       </div>
 
       <div class="btnrow" style="flex-wrap:wrap;">
