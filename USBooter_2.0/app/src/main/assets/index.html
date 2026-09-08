@@ -2350,8 +2350,24 @@
     repairBusy = busy;
     const start = document.getElementById('repairStartBtn');
     if (start) { start.disabled = busy; start.textContent = busy ? t('repair_busy') : t('repair_scan'); }
+    const stop = document.getElementById('repairCancelBtn');
+    if (stop) { stop.style.display = busy ? '' : 'none'; stop.disabled = false; }
+    const wipe = document.getElementById('repairWipeBtn');
+    if (wipe) wipe.disabled = busy;
     document.getElementById('repairApplyBtn').style.display = 'none';
     document.getElementById('repairRiskyBtn').style.display = 'none';
+  }
+
+  function deepRequested() {
+    const el = document.getElementById('repairDeep');
+    return !!(el && el.checked);
+  }
+
+  function cancelRepairScan() {
+    if (window.Android && Android.cancelRepairScan) Android.cancelRepairScan();
+    const stop = document.getElementById('repairCancelBtn');
+    if (stop) stop.disabled = true;
+    showToast(t('repair_stopping'));
   }
 
   function scanPartitions() {
@@ -2359,10 +2375,11 @@
     if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
     if (repairBusy) return;
     document.getElementById('repairCard').style.display = 'block';
-    document.getElementById('repairSummary').textContent = t('repair_scanning');
+    document.getElementById('repairSummary').textContent =
+      deepRequested() ? t('repair_scanning_deep') : t('repair_scanning');
     document.getElementById('repairChecks').innerHTML = '';
     setRepairBusy(true);
-    Android.scanPartitions(state.selectedDeviceName);
+    Android.scanPartitions(state.selectedDeviceName, deepRequested());
   }
 
   function repairPartitions(allowRisky) {
@@ -2370,7 +2387,7 @@
     if (repairBusy) return;
     document.getElementById('repairSummary').textContent = t('repair_running');
     setRepairBusy(true);
-    Android.repairPartitions(state.selectedDeviceName, !!allowRisky);
+    Android.repairPartitions(state.selectedDeviceName, !!allowRisky, deepRequested());
   }
 
   function confirmRiskyRepair() {
@@ -2380,6 +2397,49 @@
       '<button class="btn danger" onclick="closeModal(); repairPartitions(true);">' +
       t('repair_risky_go') + '</button>';
   }
+
+  // Destructive last resort: two separate confirmations, the second one typed.
+  function confirmDestructiveRebuild() {
+    if (!window.Android || !Android.rebuildDriveDestructively) { alert(t('repair_app_only')); return; }
+    if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
+    if (repairBusy) return;
+    showModal('\u26a0', t('repair_wipe_title'), t('repair_wipe_body'));
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn danger" onclick="closeModal(); confirmDestructiveRebuildStep2();">' +
+      t('repair_wipe_next') + '</button>';
+  }
+
+  function confirmDestructiveRebuildStep2() {
+    showModal('\u26a0', t('repair_wipe_title2'), t('repair_wipe_body2'));
+    document.getElementById('modalMessage').insertAdjacentHTML(
+      'beforeend',
+      '<div style="margin-top:10px;text-align:left">' +
+        '<div style="font-size:12px;opacity:.8;margin-bottom:4px;">' + t('repair_wipe_fs') + '</div>' +
+        '<select id="repairWipeFs" style="width:100%;padding:8px;">' +
+          '<option value="EXFAT">exFAT</option><option value="FAT32">FAT32</option>' +
+          '<option value="NTFS">NTFS</option></select>' +
+        '<input id="repairWipeConfirm" placeholder="' + t('type_wipe') + '" ' +
+          'style="width:100%;margin-top:8px;padding:8px;">' +
+      '</div>'
+    );
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn danger" onclick="startDestructiveRebuild()">' + t('wipe_drive') + '</button>';
+  }
+
+  function startDestructiveRebuild() {
+    const typed = (document.getElementById('repairWipeConfirm') || {}).value || '';
+    if (typed.trim().toUpperCase() !== 'WIPE') { showToast(t('repair_wipe_need_word')); return; }
+    const fs = (document.getElementById('repairWipeFs') || {}).value || 'EXFAT';
+    closeModal();
+    document.getElementById('repairCard').style.display = 'block';
+    document.getElementById('repairSummary').textContent = t('repair_wipe_running');
+    document.getElementById('repairChecks').innerHTML = '';
+    setRepairBusy(true);
+    Android.rebuildDriveDestructively(state.selectedDeviceName, fs, 'USBOOTER');
+  }
+
 
   function onRepairProgress(pct, detail) {
     const el = document.getElementById('repairSummary');
