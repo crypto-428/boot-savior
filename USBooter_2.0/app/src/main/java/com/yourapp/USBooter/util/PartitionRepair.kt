@@ -155,6 +155,9 @@ object PartitionRepair {
         )
     }
 
+    /** A filesystem found by the surface sweep, with the size it declares itself. */
+    class FoundVolume(val lba: Long, val fs: String, val sectors: Long)
+
     /** What a full-surface sweep learned about the drive. */
     class Surface(val totalSectors: Long, val blockSize: Int) {
         var sectorsRead = 0L
@@ -162,12 +165,13 @@ object PartitionRepair {
         /** Ranges of sectors the drive refused to return, as "first-last". */
         val badRanges = mutableListOf<Pair<Long, Long>>()
         var badSectors = 0L
-        /** Filesystem boot sectors found anywhere on the drive: LBA to name. */
-        val filesystems = mutableListOf<Pair<Long, String>>()
+        /** Filesystem boot sectors found anywhere on the drive. */
+        val volumes = mutableListOf<FoundVolume>()
         /** Number of valid NTFS file records seen, which proves file metadata survives. */
         var fileRecords = 0L
         var firstFileRecord = -1L
     }
+
 
     /**
      * Reads every sector of the drive in bounded windows, looking for filesystem
@@ -199,7 +203,7 @@ object PartitionRepair {
                 lastPct = pct
                 progress(
                     pct,
-                    "Reading the whole drive: $pct% (${surface.filesystems.size} filesystem trace(s), " +
+                    "Reading the whole drive: $pct% (${surface.volumes.size} filesystem trace(s), " +
                         "${surface.badSectors} unreadable sector(s))"
                 )
             }
@@ -245,7 +249,9 @@ object PartitionRepair {
         var sector = baseLba
         while (offset + blockSize <= data.size) {
             val fs = filesystemOfAt(data, offset)
-            if (fs != null && surface.filesystems.size < 64) surface.filesystems.add(sector to fs)
+            if (fs != null && surface.volumes.size < 64) {
+                surface.volumes.add(FoundVolume(sector, fs, declaredSectorsAt(data, offset, fs, blockSize)))
+            }
             if (isFileRecordAt(data, offset, blockSize)) {
                 surface.fileRecords++
                 if (surface.firstFileRecord < 0) surface.firstFileRecord = sector
@@ -253,6 +259,47 @@ object PartitionRepair {
             offset += blockSize
             sector++
         }
+    }
+
+    /**
+     * How many sectors the boot sector at [offset] says its volume spans, or 0 when
+     * the field is missing or nonsensical. This is what stops a backup boot sector or
+     * a stray signature from being turned into its own tiny partition.
+     */
+    private fun declaredSectorsAt(data: ByteArray, offset: Int, fs: String, blockSize: Int): Long {
+        val declared = when (fs) {
+            "NTFS" -> le64(data, offset + 40) + 1
+            "exFAT" -> le64(data, offset + 72)
+            else -> {
+                val small = le16(data, offset + 19).toLong()
+                if (small > 0) small else le32(data, offset + 32)
+            }
+        }
+        val bytesPerSector = le16(data, offset + 11)
+        val scale = if (bytesPerSector in 512..4096 && bytesPerSector % blockSize == 0) {
+            (bytesPerSector / blockSize).toLong()
+        } else 1L
+        val sectors = declared * scale
+        return if (sectors <= 0 || sectors > 1L shl 44) 0 else sectors
+    }
+
+    /**
+     * The filesystems worth putting back in the partition table: big enough to be a
+     * real volume, inside the drive, and not a backup copy sitting inside a volume
+     * that was already accepted. Without this filter a single damaged NTFS stick came
+     * back as a handful of kilobyte-sized partitions.
+     */
+    private fun realVolumes(surface: Surface, minSectors: Long = 2048): List<FoundVolume> {
+        val out = mutableListOf<FoundVolume>()
+        var coveredTo = -1L
+        for (v in surface.volumes.sortedBy { it.lba }) {
+            if (v.lba <= coveredTo) continue                                  // inside a volume already taken
+            if (v.sectors < minSectors) continue                              // kilobyte-sized: not a volume
+            if (v.lba + v.sectors > surface.totalSectors) continue            // does not fit on this drive
+            out.add(v)
+            coveredTo = v.lba + v.sectors - 1
+        }
+        return out
     }
 
     /** Turns a surface sweep into findings and honest report lines. */
@@ -271,9 +318,9 @@ object PartitionRepair {
         inspected += "Full drive scan: ${surface.sectorsRead} of ${surface.totalSectors} sectors read" +
             (if (surface.cancelled) " (cancelled early)" else "")
         inspected += "Full drive scan: ${surface.badSectors} unreadable sector(s), " +
-            "${surface.filesystems.size} filesystem trace(s), ${surface.fileRecords} file record(s)"
-        surface.filesystems.take(16).forEach { (lba, fs) ->
-            inspected += "Found a $fs boot sector at sector $lba"
+            "${surface.volumes.size} filesystem trace(s), ${surface.fileRecords} file record(s)"
+        surface.volumes.take(16).forEach { v ->
+            inspected += "Found a ${v.fs} boot sector at sector ${v.lba} spanning ${v.sectors} sector(s)"
         }
         surface.badRanges.take(20).forEach { (from, to) ->
             inspected += "Unreadable sectors $from to $to"
@@ -292,35 +339,51 @@ object PartitionRepair {
             )
         }
 
+        val volumes = realVolumes(surface)
+        val ignored = surface.volumes.size - volumes.size
+        if (ignored > 0) {
+            inspected += "Ignored $ignored boot sector trace(s): backup copies or too small to be a real volume"
+        }
         val known = layout.map { it.optLong("startLba", -1L) }.toSet()
-        surface.filesystems.filter { it.first !in known }.take(4).forEach { (lba, fs) ->
+        val orphans = volumes.filter { it.lba !in known }.take(4)
+        if (orphans.isNotEmpty()) {
+            val names = orphans.joinToString(", ") { "${it.fs} at sector ${it.lba}" }
             findings.add(
                 Finding(
-                    "surface-orphan-${lba}",
-                    "A $fs filesystem at sector $lba is missing from the partition table",
-                    "The full scan found a working $fs boot sector at sector $lba, but the partition table does not list it. " +
-                        "Adding an entry that points at it usually makes the files visible again, and it rewrites the table only.",
+                    "surface-orphans",
+                    "${orphans.size} filesystem(s) on this drive are missing from the partition table",
+                    "The full scan found real filesystems the partition table does not list ($names). Adding entries " +
+                        "that point at them, each with the size the filesystem itself declares, usually makes the files " +
+                        "visible again, and it rewrites the table only.",
                     "safe", repairable = true
                 ) {
                     val s = device.readBlocks(0, 1)
-                    val slot = (0 until 4).firstOrNull { i ->
-                        (0 until 16).all { s[446 + i * 16 + it].toInt() == 0 }
-                    } ?: 0
-                    val base = 446 + slot * 16
-                    s[base] = 0x80.toByte()
-                    s[base + 4] = when (fs) {
-                        "NTFS" -> 0x07
-                        "exFAT" -> 0x07
-                        else -> 0x0C
+                    // Rewrite the whole table in one pass so the entries cannot overlap
+                    // or be written into a slot another entry just claimed.
+                    val kept = (0 until 4)
+                        .map { i -> s.copyOfRange(446 + i * 16, 446 + i * 16 + 16) }
+                        .filter { e -> e.any { it.toInt() != 0 } && le32(e, 8) in known }
+                    val entries = kept + orphans.map { v ->
+                        ByteArray(16).also { e ->
+                            e[4] = if (v.fs == "NTFS" || v.fs == "exFAT") 0x07 else 0x0C
+                            put32(e, 8, v.lba)
+                            put32(e, 12, minOf(v.sectors, 0xFFFFFFFFL))
+                        }
                     }
-                    put32(s, base + 8, lba)
-                    put32(s, base + 12, device.totalBlocks - lba)
+                    val ordered = entries.sortedBy { le32(it, 8) }.take(4)
+                    for (i in 0 until 4) {
+                        val src = (ordered.getOrNull(i) ?: ByteArray(16)).copyOf()
+                        src[0] = if (i == 0 && ordered.isNotEmpty()) 0x80.toByte() else 0
+                        src.copyInto(s, 446 + i * 16)
+                    }
+
                     s[510] = 0x55
                     s[511] = 0xAA.toByte()
                     device.writeBlocks(0, s)
                 }
             )
         }
+
 
         if (surface.badSectors > 0 || surface.cancelled) {
             findings.removeAll { it.id == "clean" }
@@ -1470,11 +1533,17 @@ object PartitionRepair {
                 put(
                     "found",
                     JSONArray().apply {
-                        surface.filesystems.forEach {
-                            put(JSONObject().put("startLba", it.first).put("filesystem", it.second))
+                        surface.volumes.forEach {
+                            put(
+                                JSONObject()
+                                    .put("startLba", it.lba)
+                                    .put("filesystem", it.fs)
+                                    .put("sizeSectors", it.sectors)
+                            )
                         }
                     }
                 )
+
             }
 
             put(
