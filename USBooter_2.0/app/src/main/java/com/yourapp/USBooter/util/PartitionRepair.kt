@@ -203,7 +203,7 @@ object PartitionRepair {
                 lastPct = pct
                 progress(
                     pct,
-                    "Reading the whole drive: $pct% (${surface.filesystems.size} filesystem trace(s), " +
+                    "Reading the whole drive: $pct% (${surface.volumes.size} filesystem trace(s), " +
                         "${surface.badSectors} unreadable sector(s))"
                 )
             }
