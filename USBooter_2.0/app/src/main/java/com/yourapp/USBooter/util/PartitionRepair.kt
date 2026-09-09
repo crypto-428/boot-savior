@@ -155,6 +155,9 @@ object PartitionRepair {
         )
     }
 
+    /** A filesystem found by the surface sweep, with the size it declares itself. */
+    class FoundVolume(val lba: Long, val fs: String, val sectors: Long)
+
     /** What a full-surface sweep learned about the drive. */
     class Surface(val totalSectors: Long, val blockSize: Int) {
         var sectorsRead = 0L
@@ -162,12 +165,13 @@ object PartitionRepair {
         /** Ranges of sectors the drive refused to return, as "first-last". */
         val badRanges = mutableListOf<Pair<Long, Long>>()
         var badSectors = 0L
-        /** Filesystem boot sectors found anywhere on the drive: LBA to name. */
-        val filesystems = mutableListOf<Pair<Long, String>>()
+        /** Filesystem boot sectors found anywhere on the drive. */
+        val volumes = mutableListOf<FoundVolume>()
         /** Number of valid NTFS file records seen, which proves file metadata survives. */
         var fileRecords = 0L
         var firstFileRecord = -1L
     }
+
 
     /**
      * Reads every sector of the drive in bounded windows, looking for filesystem
