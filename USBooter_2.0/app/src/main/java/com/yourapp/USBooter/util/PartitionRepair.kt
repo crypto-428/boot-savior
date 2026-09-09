@@ -1474,11 +1474,17 @@ object PartitionRepair {
                 put(
                     "found",
                     JSONArray().apply {
-                        surface.filesystems.forEach {
-                            put(JSONObject().put("startLba", it.first).put("filesystem", it.second))
+                        surface.volumes.forEach {
+                            put(
+                                JSONObject()
+                                    .put("startLba", it.lba)
+                                    .put("filesystem", it.fs)
+                                    .put("sizeSectors", it.sectors)
+                            )
                         }
                     }
                 )
+
             }
 
             put(
