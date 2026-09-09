@@ -372,10 +372,11 @@ object PartitionRepair {
                     }
                     val ordered = entries.sortedBy { le32(it, 8) }.take(4)
                     for (i in 0 until 4) {
-                        val src = ordered.getOrNull(i) ?: ByteArray(16)
+                        val src = (ordered.getOrNull(i) ?: ByteArray(16)).copyOf()
+                        src[0] = if (i == 0 && ordered.isNotEmpty()) 0x80.toByte() else 0
                         src.copyInto(s, 446 + i * 16)
                     }
-                    if (ordered.isNotEmpty()) s[446] = 0x80.toByte()
+
                     s[510] = 0x55
                     s[511] = 0xAA.toByte()
                     device.writeBlocks(0, s)
