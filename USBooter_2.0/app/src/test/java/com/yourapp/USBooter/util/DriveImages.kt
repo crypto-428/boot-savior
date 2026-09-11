@@ -109,3 +109,44 @@ object DriveImages {
         return device
     }
 }
+
+/**
+ * Extra fixtures for the surface-sweep tests: a FAT32 boot sector that no other
+ * structure on the drive confirms (a leftover from an old format), and a real
+ * unlisted NTFS volume that does have its backup copy in place.
+ */
+object SurfaceImages {
+
+    fun fat32Boot(totalSectors: Long = 4000): ByteArray {
+        val s = ByteArray(512)
+        DriveImages.le(s, 11, 512L, 2)
+        s[13] = 8
+        DriveImages.le(s, 32, totalSectors, 4)
+        System.arraycopy("FAT32   ".toByteArray(Charsets.US_ASCII), 0, s, 82, 8)
+        s[510] = 0x55
+        s[511] = 0xAA.toByte()
+        return s
+    }
+
+    /** Healthy listed NTFS partition plus a stale FAT32 signature further along. */
+    fun driveWithStaleFat32Signature(): FakeBlockDevice {
+        val device = DriveImages.healthyNtfsDrive()
+        device.put(19_000, fat32Boot())
+        return device
+    }
+
+    /** Healthy listed NTFS partition plus a genuine unlisted NTFS volume. */
+    fun driveWithUnlistedNtfsVolume(): FakeBlockDevice {
+        val device = FakeBlockDevice(totalBlocks = 60_000)
+        device.put(0, DriveImages.mbr())
+        val boot = DriveImages.ntfsBoot()
+        device.put(DriveImages.PART_START, boot)
+        device.put(DriveImages.PART_START + DriveImages.PART_SECTORS - 1, boot)
+        device.put(DriveImages.PART_START + 100 * 8, DriveImages.mftRecord())
+        device.put(DriveImages.PART_START + 200 * 8, DriveImages.mftRecord())
+        val orphan = DriveImages.ntfsBoot(totalSectors = 3999)
+        device.put(20_000, orphan)
+        device.put(20_000 + 3999, orphan)
+        return device
+    }
+}
