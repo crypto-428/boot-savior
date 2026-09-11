@@ -265,6 +265,45 @@ class PartitionRepairTest {
         assertTrue(lines.any { it.contains("boot sector bytes:") })
     }
 
+
+    // ---------------------------------------------------- surface sweep safety
+
+    @Test
+    fun `stale filesystem signature is never turned into a partition`() {
+        val device = SurfaceImages.driveWithStaleFat32Signature()
+        val before = device.sector(0).copyOf()
+
+        val scan = PartitionRepair.scanDevice(device, deep = true)
+        assertFalse(ids(scan).contains("surface-orphans"))
+
+        PartitionRepair.repairDevice(device, allowRisky = true, deep = true)
+        assertArrayEquals(before, device.sector(0))
+    }
+
+    @Test
+    fun `unlisted real volume is offered as a risky repair and keeps existing entries`() {
+        val device = SurfaceImages.driveWithUnlistedNtfsVolume()
+        val before = device.sector(0).copyOf()
+
+        val scan = PartitionRepair.scanDevice(device, deep = true)
+        val f = finding(scan, "surface-orphans")
+        assertEquals("risky", f.getString("severity"))
+        assertTrue(f.getBoolean("repairable"))
+
+        // Refused without permission: the table is untouched.
+        PartitionRepair.repairDevice(device, allowRisky = false, deep = true)
+        assertArrayEquals(before, device.sector(0))
+
+        PartitionRepair.repairDevice(device, allowRisky = true, deep = true)
+        val table = device.sector(0)
+        // The partition that was already listed survives, unchanged and unshrunk.
+        assertEquals(PART_START, readLe32(table, 446 + 8))
+        assertEquals(PART_SECTORS, readLe32(table, 446 + 12))
+        // The recovered volume is added in the next slot, sized as it declares.
+        assertEquals(20_000L, readLe32(table, 446 + 16 + 8))
+        assertEquals(4000L, readLe32(table, 446 + 16 + 12))
+    }
+
     // ---------------------------------------------------------------- helpers
 
 
