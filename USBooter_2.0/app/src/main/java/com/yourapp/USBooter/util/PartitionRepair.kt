@@ -284,18 +284,38 @@ object PartitionRepair {
     }
 
     /**
-     * The filesystems worth putting back in the partition table: big enough to be a
-     * real volume, inside the drive, and not a backup copy sitting inside a volume
-     * that was already accepted. Without this filter a single damaged NTFS stick came
-     * back as a handful of kilobyte-sized partitions.
+     * A boot sector only counts as a real volume when something else on the drive
+     * agrees with it: for NTFS/exFAT a matching backup boot sector exactly where the
+     * declared size puts it, otherwise surviving NTFS file records inside its range.
+     * A stale signature left behind by an old format has neither, which is what used
+     * to turn one damaged stick into three tiny "working" partitions.
      */
-    private fun realVolumes(surface: Surface, minSectors: Long = 2048): List<FoundVolume> {
+    private fun corroborated(device: BlockDevice?, surface: Surface, v: FoundVolume): Boolean {
+        if (device != null && (v.fs == "NTFS" || v.fs == "exFAT")) {
+            val copy = runCatching { device.readBlocks(v.lba + v.sectors - 1, 1) }.getOrNull()
+            if (copy != null && filesystemOf(copy) == v.fs) return true
+        }
+        val first = surface.firstFileRecord
+        return first in v.lba until (v.lba + v.sectors)
+    }
+
+    /**
+     * The filesystems worth putting back in the partition table: big enough to be a
+     * real volume, inside the drive, corroborated by a second structure, and not a
+     * backup copy sitting inside a volume that was already accepted.
+     */
+    private fun realVolumes(
+        surface: Surface,
+        device: BlockDevice? = null,
+        minSectors: Long = 2048
+    ): List<FoundVolume> {
         val out = mutableListOf<FoundVolume>()
         var coveredTo = -1L
         for (v in surface.volumes.sortedBy { it.lba }) {
             if (v.lba <= coveredTo) continue                                  // inside a volume already taken
             if (v.sectors < minSectors) continue                              // kilobyte-sized: not a volume
             if (v.lba + v.sectors > surface.totalSectors) continue            // does not fit on this drive
+            if (!corroborated(device, surface, v)) continue                   // stale signature, not a volume
             out.add(v)
             coveredTo = v.lba + v.sectors - 1
         }
@@ -339,10 +359,10 @@ object PartitionRepair {
             )
         }
 
-        val volumes = realVolumes(surface)
+        val volumes = realVolumes(surface, device)
         val ignored = surface.volumes.size - volumes.size
         if (ignored > 0) {
-            inspected += "Ignored $ignored boot sector trace(s): backup copies or too small to be a real volume"
+            inspected += "Ignored $ignored boot sector trace(s): backup copies, stale signatures or too small to be a volume"
         }
         val known = layout.map { it.optLong("startLba", -1L) }.toSet()
         val orphans = volumes.filter { it.lba !in known }.take(4)
@@ -352,18 +372,25 @@ object PartitionRepair {
                 Finding(
                     "surface-orphans",
                     "${orphans.size} filesystem(s) on this drive are missing from the partition table",
-                    "The full scan found real filesystems the partition table does not list ($names). Adding entries " +
-                        "that point at them, each with the size the filesystem itself declares, usually makes the files " +
-                        "visible again, and it rewrites the table only.",
-                    "safe", repairable = true
+                    "The full scan found filesystems the partition table does not list ($names), each confirmed by a second " +
+                        "structure on the drive. Adding entries that point at them can make the files visible again, but it " +
+                        "replaces the current table, so it is only done when you allow risky repairs.",
+                    "risky", repairable = true
                 ) {
                     val s = device.readBlocks(0, 1)
                     // Rewrite the whole table in one pass so the entries cannot overlap
-                    // or be written into a slot another entry just claimed.
+                    // or be written into a slot another entry just claimed. Every entry
+                    // that already exists is kept: a listed partition is never dropped
+                    // or shrunk to make room for something the sweep found.
                     val kept = (0 until 4)
                         .map { i -> s.copyOfRange(446 + i * 16, 446 + i * 16 + 16) }
-                        .filter { e -> e.any { it.toInt() != 0 } && le32(e, 8) in known }
-                    val entries = kept + orphans.map { v ->
+                        .filter { e -> e.any { it.toInt() != 0 } }
+                    val keptRanges = kept.map { le32(it, 8) to le32(it, 12) }
+                    val entries = kept + orphans.filter { v ->
+                        keptRanges.none { (start, len) ->
+                            v.lba < start + maxOf(len, 1) && start < v.lba + v.sectors
+                        }
+                    }.map { v ->
                         ByteArray(16).also { e ->
                             e[4] = if (v.fs == "NTFS" || v.fs == "exFAT") 0x07 else 0x0C
                             put32(e, 8, v.lba)
