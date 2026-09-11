@@ -359,10 +359,10 @@ object PartitionRepair {
             )
         }
 
-        val volumes = realVolumes(surface)
+        val volumes = realVolumes(surface, device)
         val ignored = surface.volumes.size - volumes.size
         if (ignored > 0) {
-            inspected += "Ignored $ignored boot sector trace(s): backup copies or too small to be a real volume"
+            inspected += "Ignored $ignored boot sector trace(s): backup copies, stale signatures or too small to be a volume"
         }
         val known = layout.map { it.optLong("startLba", -1L) }.toSet()
         val orphans = volumes.filter { it.lba !in known }.take(4)
@@ -372,18 +372,25 @@ object PartitionRepair {
                 Finding(
                     "surface-orphans",
                     "${orphans.size} filesystem(s) on this drive are missing from the partition table",
-                    "The full scan found real filesystems the partition table does not list ($names). Adding entries " +
-                        "that point at them, each with the size the filesystem itself declares, usually makes the files " +
-                        "visible again, and it rewrites the table only.",
-                    "safe", repairable = true
+                    "The full scan found filesystems the partition table does not list ($names), each confirmed by a second " +
+                        "structure on the drive. Adding entries that point at them can make the files visible again, but it " +
+                        "replaces the current table, so it is only done when you allow risky repairs.",
+                    "risky", repairable = true
                 ) {
                     val s = device.readBlocks(0, 1)
                     // Rewrite the whole table in one pass so the entries cannot overlap
-                    // or be written into a slot another entry just claimed.
+                    // or be written into a slot another entry just claimed. Every entry
+                    // that already exists is kept: a listed partition is never dropped
+                    // or shrunk to make room for something the sweep found.
                     val kept = (0 until 4)
                         .map { i -> s.copyOfRange(446 + i * 16, 446 + i * 16 + 16) }
-                        .filter { e -> e.any { it.toInt() != 0 } && le32(e, 8) in known }
-                    val entries = kept + orphans.map { v ->
+                        .filter { e -> e.any { it.toInt() != 0 } }
+                    val keptRanges = kept.map { le32(it, 8) to le32(it, 12) }
+                    val entries = kept + orphans.filter { v ->
+                        keptRanges.none { (start, len) ->
+                            v.lba < start + maxOf(len, 1) && start < v.lba + v.sectors
+                        }
+                    }.map { v ->
                         ByteArray(16).also { e ->
                             e[4] = if (v.fs == "NTFS" || v.fs == "exFAT") 0x07 else 0x0C
                             put32(e, 8, v.lba)
