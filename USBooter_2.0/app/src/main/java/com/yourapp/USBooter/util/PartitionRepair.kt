@@ -284,18 +284,38 @@ object PartitionRepair {
     }
 
     /**
-     * The filesystems worth putting back in the partition table: big enough to be a
-     * real volume, inside the drive, and not a backup copy sitting inside a volume
-     * that was already accepted. Without this filter a single damaged NTFS stick came
-     * back as a handful of kilobyte-sized partitions.
+     * A boot sector only counts as a real volume when something else on the drive
+     * agrees with it: for NTFS/exFAT a matching backup boot sector exactly where the
+     * declared size puts it, otherwise surviving NTFS file records inside its range.
+     * A stale signature left behind by an old format has neither, which is what used
+     * to turn one damaged stick into three tiny "working" partitions.
      */
-    private fun realVolumes(surface: Surface, minSectors: Long = 2048): List<FoundVolume> {
+    private fun corroborated(device: BlockDevice?, surface: Surface, v: FoundVolume): Boolean {
+        if (device != null && (v.fs == "NTFS" || v.fs == "exFAT")) {
+            val copy = runCatching { device.readBlocks(v.lba + v.sectors - 1, 1) }.getOrNull()
+            if (copy != null && filesystemOf(copy) == v.fs) return true
+        }
+        val first = surface.firstFileRecord
+        return first in v.lba until (v.lba + v.sectors)
+    }
+
+    /**
+     * The filesystems worth putting back in the partition table: big enough to be a
+     * real volume, inside the drive, corroborated by a second structure, and not a
+     * backup copy sitting inside a volume that was already accepted.
+     */
+    private fun realVolumes(
+        surface: Surface,
+        device: BlockDevice? = null,
+        minSectors: Long = 2048
+    ): List<FoundVolume> {
         val out = mutableListOf<FoundVolume>()
         var coveredTo = -1L
         for (v in surface.volumes.sortedBy { it.lba }) {
             if (v.lba <= coveredTo) continue                                  // inside a volume already taken
             if (v.sectors < minSectors) continue                              // kilobyte-sized: not a volume
             if (v.lba + v.sectors > surface.totalSectors) continue            // does not fit on this drive
+            if (!corroborated(device, surface, v)) continue                   // stale signature, not a volume
             out.add(v)
             coveredTo = v.lba + v.sectors - 1
         }
