@@ -398,6 +398,72 @@ class WebAppInterface(private val activity: MainActivity) {
         }
     }
 
+    // ------------------------------------------------- partition editor bridge
+
+    /** Current partitions with the size limits the editor may offer. */
+    @JavascriptInterface
+    fun listPartitions(deviceName: String) = editorTask {
+        com.yourapp.USBooter.util.PartitionManager.list(activity.applicationContext, deviceName)
+    }
+
+    /** Removes a table entry; the sectors themselves are left untouched. */
+    @JavascriptInterface
+    fun deletePartition(deviceName: String, index: Int) = editorTask {
+        com.yourapp.USBooter.util.PartitionManager.delete(activity.applicationContext, deviceName, index)
+    }
+
+    /** Shrinks or extends a partition (and NTFS inside it) in sectors. */
+    @JavascriptInterface
+    fun resizePartition(deviceName: String, index: Int, newSectors: String, allowDataLoss: Boolean) =
+        editorTask {
+            com.yourapp.USBooter.util.PartitionManager.resize(
+                activity.applicationContext,
+                deviceName,
+                index,
+                newSectors.toLongOrNull() ?: -1L,
+                allowDataLoss
+            )
+        }
+
+    /** Creates and formats a partition in free space. */
+    @JavascriptInterface
+    fun createPartition(
+        deviceName: String,
+        startLba: String,
+        sectors: String,
+        filesystem: String,
+        label: String
+    ) = editorTask {
+        com.yourapp.USBooter.util.PartitionManager.create(
+            activity.applicationContext,
+            deviceName,
+            startLba.toLongOrNull() ?: -1L,
+            sectors.toLongOrNull() ?: -1L,
+            filesystem,
+            label
+        )
+    }
+
+    /** Moving a partition is refused on purpose; the reason is shown to the user. */
+    @JavascriptInterface
+    fun movePartition() = editorTask { com.yourapp.USBooter.util.PartitionManager.move() }
+
+    private fun editorTask(work: () -> JSONObject) {
+        if (com.yourapp.USBooter.service.FormatService.isRunning) {
+            showToast("A flash is running - wait for it to finish")
+            return
+        }
+        thread {
+            val json = runCatching { work() }.getOrElse {
+                JSONObject()
+                    .put("ok", false)
+                    .put("summary", "Partition editing failed: ${it.message ?: "unknown error"}")
+                    .put("partitions", JSONArray())
+            }
+            post("onPartitionEditor($json)")
+        }
+    }
+
 
     private fun post(js: String) = activity.runOnUiThread {
         activity.webView.evaluateJavascript(js, null)
