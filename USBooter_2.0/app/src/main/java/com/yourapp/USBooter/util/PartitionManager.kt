@@ -271,10 +271,18 @@ object PartitionManager {
             "EXFAT" -> Filesystem.EXFAT
             else -> Filesystem.FAT32
         }
+        // FAT32/exFAT formatters need the real USB transport; NTFS only needs writes.
+        val usb = device as? UsbBulkStorageDevice
         when (fs) {
-            Filesystem.FAT32 -> Fat32Formatter.format(device, startLba, sectors, label)
-            Filesystem.EXFAT -> ExfatFormatter.format(device, startLba, sectors, label)
             Filesystem.NTFS -> NtfsFormatter.format(device, startLba, sectors, label)
+            Filesystem.FAT32 -> {
+                usb ?: return failure("This drive cannot be formatted as FAT32 right now")
+                Fat32Formatter.format(usb, startLba, sectors, label)
+            }
+            Filesystem.EXFAT -> {
+                usb ?: return failure("This drive cannot be formatted as exFAT right now")
+                ExfatFormatter.format(usb, startLba, sectors, label)
+            }
         }
         val o = 446 + slot * 16
         ByteArray(16).copyInto(s, o)
