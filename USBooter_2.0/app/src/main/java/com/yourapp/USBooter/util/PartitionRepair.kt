@@ -1605,7 +1605,7 @@ object PartitionRepair {
     }
 
 
-    private inline fun withDrive(
+    internal fun withDrive(
         context: Context,
         deviceName: String,
         block: (BlockDevice) -> JSONObject
