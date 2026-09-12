@@ -2463,6 +2463,136 @@
   function onRepairScan(result) { renderRepair(result, false); }
   function onRepairResult(result) { renderRepair(result, true); }
 
+  // ---------------------------------------------------------- partition editor
+  var peState = null;
+
+  function peGuard() {
+    if (!window.Android || !Android.listPartitions) { alert(t('repair_app_only')); return false; }
+    if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return false; }
+    if (repairBusy) return false;
+    return true;
+  }
+
+  function peMB(sectors) {
+    const bs = (peState && peState.blockSize) || 512;
+    return Math.round((Number(sectors) * bs) / (1024 * 1024));
+  }
+
+  function peSectors(mb) {
+    const bs = (peState && peState.blockSize) || 512;
+    return Math.round((Number(mb) * 1024 * 1024) / bs);
+  }
+
+  function loadPartitionEditor() {
+    if (!peGuard()) return;
+    document.getElementById('peSummary').textContent = t('pe_loading');
+    Android.listPartitions(state.selectedDeviceName);
+  }
+
+  function onPartitionEditor(result) {
+    peState = result || {};
+    const parts = Array.isArray(peState.partitions) ? peState.partitions : [];
+    document.getElementById('peSummary').textContent =
+      (peState.ok ? '' : '\u26a0 ') + I18N.tNative(peState.summary || '');
+
+    document.getElementById('peList').innerHTML = parts.map(function (p) {
+      const fs = p.filesystem || t('pe_unknown_fs');
+      return '<div class="info-card" style="margin-top:8px;padding:10px;">' +
+        '<div style="font-weight:600">' + t('pe_partition') + ' ' + p.index + ' \u00b7 ' + escapeHtml(fs) + '</div>' +
+        '<div style="font-size:11px;opacity:.8;margin-top:2px;">' + peMB(p.sizeSectors) + ' MB \u00b7 ' +
+          t('pe_starts_at') + ' ' + p.startLba + '</div>' +
+        '<div style="font-size:11px;opacity:.7;margin-top:4px;">' + escapeHtml(I18N.tNative(p.note || '')) + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:8px;">' +
+          (p.canResize ? '<button class="btn" style="flex:1;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" onclick="askResizePartition(' + p.index + ')">' + t('pe_resize') + '</button>' : '') +
+          (p.canDelete ? '<button class="btn danger" style="flex:1" onclick="askDeletePartition(' + p.index + ')">' + t('pe_delete') + '</button>' : '') +
+        '</div></div>';
+    }).join('');
+
+    const free = Number(peState.freeSectors || 0);
+    const freeBox = document.getElementById('peFree');
+    freeBox.style.display = free > 0 ? 'block' : 'none';
+    freeBox.textContent = t('pe_free_space') + ': ' + peMB(free) + ' MB';
+    document.getElementById('peCreateBtn').style.display =
+      (peState.editable && free > peSectors(16)) ? 'block' : 'none';
+  }
+
+  function peFind(index) {
+    const parts = (peState && peState.partitions) || [];
+    for (var i = 0; i < parts.length; i++) if (parts[i].index === index) return parts[i];
+    return null;
+  }
+
+  function askResizePartition(index) {
+    const p = peFind(index);
+    if (!p) return;
+    const minMB = Math.max(1, peMB(p.minSizeSectors));
+    const maxMB = peMB(p.maxSizeSectors);
+    showModal('\u2194', t('pe_resize_title') + ' ' + index,
+      t('pe_resize_body') + ' ' + minMB + ' \u2013 ' + maxMB + ' MB.');
+    document.getElementById('modalMessage').insertAdjacentHTML('beforeend',
+      '<div style="margin-top:10px;text-align:left">' +
+        '<input id="peSizeMB" type="number" value="' + peMB(p.sizeSectors) + '" min="' + minMB +
+          '" max="' + maxMB + '" style="width:100%;padding:8px;">' +
+        '<label style="display:flex;gap:8px;margin-top:8px;font-size:11px;opacity:.8;">' +
+          '<input type="checkbox" id="peAllowLoss"><span>' + t('pe_allow_loss') + '</span></label>' +
+      '</div>');
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn primary" onclick="doResizePartition(' + index + ')">' + t('pe_apply') + '</button>';
+  }
+
+  function doResizePartition(index) {
+    const mb = Number((document.getElementById('peSizeMB') || {}).value || 0);
+    if (!(mb > 0)) { showToast(t('pe_bad_size')); return; }
+    const loss = !!(document.getElementById('peAllowLoss') || {}).checked;
+    closeModal();
+    document.getElementById('peSummary').textContent = t('pe_working');
+    Android.resizePartition(state.selectedDeviceName, index, String(peSectors(mb)), loss);
+  }
+
+  function askDeletePartition(index) {
+    showModal('\u26a0', t('pe_delete_title') + ' ' + index, t('pe_delete_body'));
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn danger" onclick="closeModal(); doDeletePartition(' + index + ')">' +
+      t('pe_delete') + '</button>';
+  }
+
+  function doDeletePartition(index) {
+    document.getElementById('peSummary').textContent = t('pe_working');
+    Android.deletePartition(state.selectedDeviceName, index);
+  }
+
+  function askCreatePartition() {
+    if (!peState) return;
+    const maxMB = peMB(peState.freeSectors);
+    showModal('\u002b', t('pe_create_title'), t('pe_create_body') + ' ' + maxMB + ' MB.');
+    document.getElementById('modalMessage').insertAdjacentHTML('beforeend',
+      '<div style="margin-top:10px;text-align:left">' +
+        '<input id="peNewMB" type="number" value="' + maxMB + '" min="16" max="' + maxMB +
+          '" style="width:100%;padding:8px;">' +
+        '<select id="peNewFs" style="width:100%;margin-top:8px;padding:8px;">' +
+          '<option value="EXFAT">exFAT</option><option value="FAT32">FAT32</option>' +
+          '<option value="NTFS">NTFS</option></select>' +
+        '<input id="peNewLabel" value="USBOOTER" maxlength="11" style="width:100%;margin-top:8px;padding:8px;">' +
+      '</div>');
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn primary" onclick="doCreatePartition()">' + t('pe_apply') + '</button>';
+  }
+
+  function doCreatePartition() {
+    const mb = Number((document.getElementById('peNewMB') || {}).value || 0);
+    if (!(mb >= 16)) { showToast(t('pe_bad_size')); return; }
+    const fs = (document.getElementById('peNewFs') || {}).value || 'EXFAT';
+    const label = ((document.getElementById('peNewLabel') || {}).value || 'USBOOTER').trim() || 'USBOOTER';
+    closeModal();
+    document.getElementById('peSummary').textContent = t('pe_working');
+    Android.createPartition(state.selectedDeviceName, String(peState.freeStartLba),
+      String(Math.min(peSectors(mb), Number(peState.freeSectors))), fs, label);
+  }
+
+
   function renderRepair(result, applied) {
     lastRepairScan = result;
     document.getElementById('repairCard').style.display = 'block';
