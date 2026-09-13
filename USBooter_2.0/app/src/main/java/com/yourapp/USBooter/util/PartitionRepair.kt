@@ -435,6 +435,7 @@ object PartitionRepair {
         device: BlockDevice,
         allowRisky: Boolean,
         deep: Boolean = false,
+        allowDataLoss: Boolean = false,
         isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
@@ -448,7 +449,13 @@ object PartitionRepair {
 
 
         val todo = findings.filter {
-            it.repairable && it.fix != null && (it.severity == "safe" || allowRisky)
+            it.repairable && it.fix != null && when (it.severity) {
+                "safe" -> true
+                "risky" -> allowRisky
+                // Erases one partition: never applied unless the user asked for it.
+                "destructive" -> allowDataLoss
+                else -> false
+            }
         }
         var applied = 0
         todo.forEachIndexed { index, finding ->
