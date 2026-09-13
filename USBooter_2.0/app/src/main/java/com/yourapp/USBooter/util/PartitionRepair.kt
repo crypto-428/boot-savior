@@ -1622,6 +1622,7 @@ object PartitionRepair {
             put("appliedCount", applied)
             put("safeCount", safe)
             put("riskyCount", risky)
+            put("destructiveCount", problems.count { it.severity == "destructive" })
             put("remainingCount", remaining)
             put("findings", JSONArray().apply { findings.forEach { put(it.toJson()) } })
             put("inspected", JSONArray().apply { inspected.forEach { put(it) } })
