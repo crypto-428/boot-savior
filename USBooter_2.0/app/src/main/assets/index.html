@@ -1384,6 +1384,7 @@
           </div>
           <button class="btn" id="repairApplyBtn" onclick="repairPartitions(false)" style="display:none;width:100%;margin-top:10px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_apply">Repair without losing files</button>
           <button class="btn danger" id="repairRiskyBtn" onclick="confirmRiskyRepair()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_risky">Repair anyway (files may be lost)</button>
+          <button class="btn danger" id="repairRebuildFsBtn" onclick="confirmFilesystemRebuild()" style="display:none;width:100%;margin-top:8px;" data-i18n="repair_rebuild_fs">Rebuild this partition as empty NTFS (erases its files)</button>
         </div>
 
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12px;color:var(--text-muted);text-align:left;">
@@ -2396,12 +2397,14 @@
     Android.scanPartitions(state.selectedDeviceName, deepRequested());
   }
 
-  function repairPartitions(allowRisky) {
+  function repairPartitions(allowRisky, allowDataLoss) {
     if (!window.Android || !Android.repairPartitions) { alert(t('repair_app_only')); return; }
     if (repairBusy) return;
     document.getElementById('repairSummary').textContent = t('repair_running');
     setRepairBusy(true);
-    Android.repairPartitions(state.selectedDeviceName, !!allowRisky, deepRequested());
+    Android.repairPartitions(
+      state.selectedDeviceName, !!allowRisky, deepRequested(), !!allowDataLoss
+    );
   }
 
   function confirmRiskyRepair() {
@@ -2410,6 +2413,16 @@
       '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
       '<button class="btn danger" onclick="closeModal(); repairPartitions(true);">' +
       t('repair_risky_go') + '</button>';
+  }
+
+  // Rebuilds the damaged partition's filesystem in place, at its full size, with
+  // the same NTFS builder the flashing step uses. Only that partition is erased.
+  function confirmFilesystemRebuild() {
+    showModal('\u26a0', t('repair_rebuild_fs_title'), t('repair_rebuild_fs_body'));
+    document.getElementById('modalBtnRow').innerHTML =
+      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn danger" onclick="closeModal(); repairPartitions(true, true);">' +
+      t('repair_rebuild_fs_go') + '</button>';
   }
 
   // Destructive last resort: two separate confirmations, the second one typed.
