@@ -127,11 +127,13 @@ object PartitionRepair {
         deviceName: String,
         allowRisky: Boolean,
         deep: Boolean = false,
+        allowDataLoss: Boolean = false,
         isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
-        repairDevice(device, allowRisky, deep, isCancelled, progress)
+        repairDevice(device, allowRisky, deep, allowDataLoss, isCancelled, progress)
     }
+
 
 
     /** Scan against any block target. Used by the USB path above and by unit tests. */
