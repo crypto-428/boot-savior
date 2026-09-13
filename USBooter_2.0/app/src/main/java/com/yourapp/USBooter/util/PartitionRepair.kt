@@ -1039,6 +1039,68 @@ object PartitionRepair {
                 "risky", repairable = false
             )
         )
+        offerNtfsRebuild(
+            device, findings, number, part,
+            "Partition $number has no readable filesystem header and no spare copy of it anywhere on the drive."
+        )
+    }
+
+    /**
+     * Last resort for a single partition: writes a brand new, empty NTFS filesystem
+     * over the partition's own geometry using the same builder the flashing step
+     * uses - which is why that path produces a volume Windows mounts while a
+     * metadata-only repair of a badly damaged volume cannot.
+     *
+     * Every file inside this partition is lost, so the finding is marked
+     * "destructive" and is applied only when the user explicitly allows data loss.
+     * The partition table, the other partitions and the rest of the drive are left
+     * exactly as they are.
+     */
+    private fun offerNtfsRebuild(
+        device: BlockDevice,
+        findings: MutableList<Finding>,
+        number: Int,
+        part: Part,
+        reason: String
+    ) {
+        if (findings.any { it.id == "ntfs-rebuild-$number" }) return
+        if (device.blockSize != 512 && device.blockSize != 4096) return
+        if (part.start < 0 || part.sectors <= 0) return
+        if (part.start + part.sectors > device.totalBlocks) return
+        if (part.sectors * device.blockSize < 16L * 1024 * 1024) return
+        findings.add(
+            Finding(
+                "ntfs-rebuild-$number",
+                "Partition $number: rebuild the NTFS filesystem in place (erases its files)",
+                "$reason The partition can still be made usable by writing a new, empty NTFS filesystem across the same " +
+                    "${part.sectors} sectors it already occupies. This uses the same filesystem builder as the flashing " +
+                    "step, so the result is a volume Windows mounts normally, at the partition's full size. Everything " +
+                    "stored in this partition is erased; the other partitions and the partition table are left alone.",
+                "destructive", repairable = true
+            ) {
+                NtfsFormatter.format(device, part.start, part.sectors, "USBooter")
+                markMbrTypeNtfs(device, part)
+            }
+        )
+    }
+
+    /**
+     * After a rebuild the table must advertise NTFS, otherwise the volume is
+     * ignored. Only the slot that really describes this partition is touched.
+     */
+    private fun markMbrTypeNtfs(device: BlockDevice, part: Part) {
+        if (part.typeByte < 0) return
+        val table = runCatching { device.readBlocks(0, 1) }.getOrNull() ?: return
+        if (!signature(table)) return
+        for (slot in 0 until 4) {
+            val base = 446 + slot * 16
+            if (le32(table, base + 8) == part.start && le32(table, base + 12) == part.sectors) {
+                if ((table[base + 4].toInt() and 0xFF) == 0x07) return
+                table[base + 4] = 0x07
+                device.writeBlocks(0, table)
+                return
+            }
+        }
     }
 
     private fun checkFat32(
@@ -1201,12 +1263,17 @@ object PartitionRepair {
                 findings.add(
                     Finding(
                         "ntfs-boot-$number",
-                        "Partition $number: NTFS structures are too damaged to repair",
+                        "Partition $number: NTFS structures are too damaged to repair without erasing files",
                         "The NTFS boot sector of partition $number is wrong (${mainProblems.joinToString(", ")}), " +
-                            "its backup copy is unusable and no master file table could be found on the drive. Nothing here " +
-                            "can be rebuilt without guessing: recover the files you need with a recovery tool, then reformat.",
+                            "its backup copy is unusable and no master file table could be found on the drive. The existing " +
+                            "files cannot be brought back by guessing: recover what you need with a recovery tool first. " +
+                            "A full in-place NTFS rebuild of this partition is offered below.",
                         "risky", repairable = false
                     )
+                )
+                offerNtfsRebuild(
+                    device, findings, number, part,
+                    "Both NTFS boot sectors of partition $number are wrong and no master file table survives."
                 )
             }
             return
@@ -1279,6 +1346,10 @@ object PartitionRepair {
                         "which cannot be done without risking file loss. Recover the files you need before reformatting.",
                     "risky", repairable = false
                 )
+            )
+            offerNtfsRebuild(
+                device, findings, number, part,
+                "Neither the master file table of partition $number nor its mirror contains a valid record."
             )
         } else if (!mainMft) {
             findings.add(
