@@ -340,10 +340,13 @@ class WebAppInterface(private val activity: MainActivity) {
     /**
      * Applies the repairs. Safe repairs rebuild a structure from a copy already
      * on the drive and cannot lose files; risky ones are applied only when the
-     * user has explicitly accepted the possible loss ([allowRisky]).
+     * user has explicitly accepted the possible loss ([allowRisky]). When
+     * [allowDataLoss] is true, a partition whose filesystem cannot be recovered is
+     * rebuilt in place as an empty NTFS volume of the same size - the files in that
+     * partition are erased, the rest of the drive is untouched.
      */
     @JavascriptInterface
-    fun repairPartitions(deviceName: String, allowRisky: Boolean, deep: Boolean) {
+    fun repairPartitions(deviceName: String, allowRisky: Boolean, deep: Boolean, allowDataLoss: Boolean) {
         if (com.yourapp.USBooter.service.FormatService.isRunning) {
             showToast("A flash is running - wait for it to finish")
             return
@@ -356,6 +359,7 @@ class WebAppInterface(private val activity: MainActivity) {
                     deviceName,
                     allowRisky,
                     deep,
+                    allowDataLoss,
                     { repairCancelled }
                 ) { pct, detail -> post("onRepairProgress($pct, ${quote(detail)})") }
             }.getOrElse {
