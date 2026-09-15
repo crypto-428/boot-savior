@@ -2697,8 +2697,11 @@
     const pending = findings.filter(function (f) { return f.repairable && !f.applied; });
     const safePending = pending.some(function (f) { return f.severity === 'safe'; });
     const riskyPending = pending.some(function (f) { return f.severity === 'risky'; });
+    const rebuildPending = pending.some(function (f) { return f.severity === 'destructive'; });
     document.getElementById('repairApplyBtn').style.display = safePending ? '' : 'none';
     document.getElementById('repairRiskyBtn').style.display = riskyPending ? '' : 'none';
+    const rebuildBtn = document.getElementById('repairRebuildFsBtn');
+    if (rebuildBtn) rebuildBtn.style.display = rebuildPending ? '' : 'none';
     if (applied) {
       showToast(result.ok ? t('repair_done') : t('repair_partial'));
       // Re-read the drive so the findings reflect the disk as it is now. This
