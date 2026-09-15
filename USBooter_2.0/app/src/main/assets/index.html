@@ -2371,6 +2371,8 @@
     if (wipe) wipe.disabled = busy;
     document.getElementById('repairApplyBtn').style.display = 'none';
     document.getElementById('repairRiskyBtn').style.display = 'none';
+    const rebuild = document.getElementById('repairRebuildFsBtn');
+    if (rebuild) rebuild.style.display = 'none';
   }
 
   function deepRequested() {
@@ -2619,7 +2621,8 @@
         : (f.severity === 'risky' ? 'var(--danger)' : 'var(--text-muted)');
       const tag = f.applied ? t('repair_tag_done')
         : (f.severity === 'safe' ? t('repair_tag_safe')
-          : (f.severity === 'risky' ? t('repair_tag_risky') : ''));
+          : (f.severity === 'risky' ? t('repair_tag_risky')
+            : (f.severity === 'destructive' ? t('repair_tag_destructive') : '')));
       return '<div class="check-line" style="display:flex;gap:8px;margin:6px 0;text-align:left">' +
         '<span style="color:' + colour + '">' + icon + '</span>' +
         '<span><strong>' + escapeHtml(I18N.tNative(f.title || '')) + '</strong>' +
@@ -2694,8 +2697,11 @@
     const pending = findings.filter(function (f) { return f.repairable && !f.applied; });
     const safePending = pending.some(function (f) { return f.severity === 'safe'; });
     const riskyPending = pending.some(function (f) { return f.severity === 'risky'; });
+    const rebuildPending = pending.some(function (f) { return f.severity === 'destructive'; });
     document.getElementById('repairApplyBtn').style.display = safePending ? '' : 'none';
     document.getElementById('repairRiskyBtn').style.display = riskyPending ? '' : 'none';
+    const rebuildBtn = document.getElementById('repairRebuildFsBtn');
+    if (rebuildBtn) rebuildBtn.style.display = rebuildPending ? '' : 'none';
     if (applied) {
       showToast(result.ok ? t('repair_done') : t('repair_partial'));
       // Re-read the drive so the findings reflect the disk as it is now. This
