@@ -108,6 +108,24 @@ object DriveImages {
         device.put(PART_START + 200 * 8, mftRecord())
         return device
     }
+
+    /** Big enough for a real NTFS rebuild (the formatter needs at least 16 MiB). */
+    const val BIG_PART_SECTORS = 120_000L
+    const val BIG_TOTAL_BLOCKS = 130_000L
+
+    /**
+     * One listed NTFS partition of a realistic size whose boot sector, backup
+     * copy and file tables are all destroyed: nothing can be recovered from the
+     * drive itself, so only an in-place rebuild is left.
+     */
+    fun hopelessNtfsPartition(): FakeBlockDevice {
+        val device = FakeBlockDevice(BIG_TOTAL_BLOCKS)
+        device.put(0, mbr(sectors = BIG_PART_SECTORS))
+        val broken = ntfsBoot(totalSectors = 9_999_999L, mftCluster = 9_999_999L, mirrorCluster = 9_999_999L)
+        device.put(PART_START, broken)
+        device.put(PART_START + BIG_PART_SECTORS - 1, broken)
+        return device
+    }
 }
 
 /**
