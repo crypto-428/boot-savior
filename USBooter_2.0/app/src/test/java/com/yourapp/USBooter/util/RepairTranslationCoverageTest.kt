@@ -86,7 +86,16 @@ class RepairTranslationCoverageTest {
             out.addAll(messages(PartitionRepair.scanDevice(build())))
             out.addAll(messages(PartitionRepair.repairDevice(build(), allowRisky = false)))
             out.addAll(messages(PartitionRepair.repairDevice(build(), allowRisky = true)))
+            out.addAll(
+                messages(
+                    PartitionRepair.repairDevice(build(), allowRisky = true, allowDataLoss = true)
+                )
+            )
         }
+
+        // The destructive in-place NTFS rebuild, which only a full-size partition
+        // is offered, so its wording cannot drift out of the rule table either.
+        collect { DriveImages.hopelessNtfsPartition() }
 
         collect { DriveImages.healthyNtfsDrive() }
         collect { FakeBlockDevice(20_000) }
