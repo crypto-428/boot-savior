@@ -85,15 +85,19 @@ object PartitionRepair {
             runCatching { device.writeBlocks(lba, zero) }
         }
         progress(20, "Writing a new partition table")
+        // The table writer and the FAT/exFAT builders need the USB drive itself,
+        // not just a generic block target.
+        val usb = device as? UsbBulkStorageDevice
+            ?: return@withDrive failure("This drive cannot be rebuilt from scratch")
         Mbr.write(
-            device,
+            usb,
             listOf(MbrPartitionEntry(start, sectors, fs, isESP = false, bootable = true)),
             installBootCode = true
         )
         progress(40, "Creating a new ${fs.displayName} filesystem")
         when (fs) {
-            Filesystem.FAT32 -> Fat32Formatter.format(device, start, sectors, label)
-            Filesystem.EXFAT -> ExfatFormatter.format(device, start, sectors, label)
+            Filesystem.FAT32 -> Fat32Formatter.format(usb, start, sectors, label)
+            Filesystem.EXFAT -> ExfatFormatter.format(usb, start, sectors, label)
             Filesystem.NTFS -> NtfsFormatter.format(device, start, sectors, label)
         }
         progress(90, "Flushing the drive cache")
