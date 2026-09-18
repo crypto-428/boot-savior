@@ -2399,13 +2399,15 @@
     Android.scanPartitions(state.selectedDeviceName, deepRequested());
   }
 
-  function repairPartitions(allowRisky, allowDataLoss) {
+  var pendingNtfsRebuildId = '';
+
+  function repairPartitions(allowRisky, allowDataLoss, targetFindingId) {
     if (!window.Android || !Android.repairPartitions) { alert(t('repair_app_only')); return; }
     if (repairBusy) return;
     document.getElementById('repairSummary').textContent = t('repair_running');
     setRepairBusy(true);
     Android.repairPartitions(
-      state.selectedDeviceName, !!allowRisky, deepRequested(), !!allowDataLoss
+      state.selectedDeviceName, !!allowRisky, deepRequested(), !!allowDataLoss, targetFindingId || ''
     );
   }
 
@@ -2423,7 +2425,7 @@
     showModal('\u26a0', t('repair_rebuild_fs_title'), t('repair_rebuild_fs_body'));
     document.getElementById('modalBtnRow').innerHTML =
       '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
-      '<button class="btn danger" onclick="closeModal(); repairPartitions(true, true);">' +
+      '<button class="btn danger" onclick="closeModal(); repairPartitions(false, true, pendingNtfsRebuildId);">' +
       t('repair_rebuild_fs_go') + '</button>';
   }
 
@@ -2697,7 +2699,9 @@
     const pending = findings.filter(function (f) { return f.repairable && !f.applied; });
     const safePending = pending.some(function (f) { return f.severity === 'safe'; });
     const riskyPending = pending.some(function (f) { return f.severity === 'risky'; });
-    const rebuildPending = pending.some(function (f) { return f.severity === 'destructive'; });
+    const rebuildFinding = pending.find(function (f) { return f.severity === 'destructive'; });
+    const rebuildPending = !!rebuildFinding;
+    pendingNtfsRebuildId = rebuildFinding ? rebuildFinding.id : '';
     document.getElementById('repairApplyBtn').style.display = safePending ? '' : 'none';
     document.getElementById('repairRiskyBtn').style.display = riskyPending ? '' : 'none';
     const rebuildBtn = document.getElementById('repairRebuildFsBtn');
@@ -2706,7 +2710,7 @@
       showToast(result.ok ? t('repair_done') : t('repair_partial'));
       // Re-read the drive so the findings reflect the disk as it is now. This
       // re-check is always quick: a second full-drive pass would take minutes.
-      setTimeout(function () {
+      if (result.ok) setTimeout(function () {
         if (repairBusy || !window.Android || !Android.scanPartitions) return;
         document.getElementById('repairSummary').textContent = t('repair_scanning');
         setRepairBusy(true);
