@@ -132,10 +132,11 @@ object PartitionRepair {
         allowRisky: Boolean,
         deep: Boolean = false,
         allowDataLoss: Boolean = false,
+        targetFindingId: String = "",
         isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit
     ): JSONObject = withDrive(context, deviceName) { device ->
-        repairDevice(device, allowRisky, deep, allowDataLoss, isCancelled, progress)
+        repairDevice(device, allowRisky, deep, allowDataLoss, targetFindingId, isCancelled, progress)
     }
 
 
@@ -440,6 +441,7 @@ object PartitionRepair {
         allowRisky: Boolean,
         deep: Boolean = false,
         allowDataLoss: Boolean = false,
+        targetFindingId: String = "",
         isCancelled: () -> Boolean = { false },
         progress: (Int, String) -> Unit = { _, _ -> }
     ): JSONObject {
@@ -453,11 +455,13 @@ object PartitionRepair {
 
 
         val todo = findings.filter {
+            val targetedRebuild = targetFindingId.isNotEmpty()
             it.repairable && it.fix != null && when (it.severity) {
-                "safe" -> true
-                "risky" -> allowRisky
-                // Erases one partition: never applied unless the user asked for it.
-                "destructive" -> allowDataLoss
+                "safe" -> !targetedRebuild
+                "risky" -> !targetedRebuild && allowRisky
+                // Erases one partition: permission alone is insufficient. The
+                // exact finding selected in the UI must also match.
+                "destructive" -> allowDataLoss && it.id == targetFindingId
                 else -> false
             }
         }
@@ -470,6 +474,12 @@ object PartitionRepair {
             try {
                 finding.fix!!.invoke()
                 finding.applied = true
+                if (finding.severity == "destructive") {
+                    val partition = finding.id.substringAfterLast('-', "")
+                    findings.filter {
+                        !it.repairable && partition.isNotEmpty() && it.id.endsWith("-$partition")
+                    }.forEach { it.applied = true }
+                }
                 applied++
             } catch (e: Throwable) {
                 finding.error = e.message ?: e.javaClass.simpleName
@@ -1093,8 +1103,35 @@ object PartitionRepair {
             ) {
                 NtfsFormatter.format(device, part.start, part.sectors, "USBooter")
                 markMbrTypeNtfs(device, part)
+                runCatching { device.synchronizeCache() }
+                verifyNtfsRebuild(device, part)
             }
         )
+    }
+
+    /** Read every critical structure back from the drive before reporting success. */
+    private fun verifyNtfsRebuild(device: BlockDevice, part: Part) {
+        val main = device.readBlocks(part.start, 1)
+        val backup = device.readBlocks(part.start + part.sectors - 1, 1)
+        require(filesystemOf(main) == "NTFS") { "NTFS rebuild verification failed: the new boot sector was not written" }
+        require(ntfsBootProblems(main, part, device.blockSize).isEmpty()) {
+            "NTFS rebuild verification failed: ${ntfsBootProblems(main, part, device.blockSize).joinToString(", ")}"
+        }
+        require(main.contentEquals(backup)) { "NTFS rebuild verification failed: the backup boot sector does not match" }
+        require(le64(main, 40) == part.sectors) { "NTFS rebuild verification failed: the volume size is incorrect" }
+        require(ntfsRecordAt(device, main, part, 48)) { "NTFS rebuild verification failed: the master file table is unreadable" }
+        require(ntfsRecordAt(device, main, part, 56)) { "NTFS rebuild verification failed: the mirror file table is unreadable" }
+
+        if (part.typeByte >= 0) {
+            val table = device.readBlocks(0, 1)
+            val matchingSlot = (0 until 4).firstOrNull { slot ->
+                val base = 446 + slot * 16
+                le32(table, base + 8) == part.start && le32(table, base + 12) == part.sectors
+            }
+            require(matchingSlot != null && (table[446 + matchingSlot * 16 + 4].toInt() and 0xFF) == 0x07) {
+                "NTFS rebuild verification failed: the partition table does not identify the rebuilt volume as NTFS"
+            }
+        }
     }
 
     /**

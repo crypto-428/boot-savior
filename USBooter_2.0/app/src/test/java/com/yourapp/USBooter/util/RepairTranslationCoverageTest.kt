@@ -88,7 +88,12 @@ class RepairTranslationCoverageTest {
             out.addAll(messages(PartitionRepair.repairDevice(build(), allowRisky = true)))
             out.addAll(
                 messages(
-                    PartitionRepair.repairDevice(build(), allowRisky = true, allowDataLoss = true)
+                    PartitionRepair.repairDevice(
+                        build(),
+                        allowRisky = false,
+                        allowDataLoss = true,
+                        targetFindingId = "ntfs-rebuild-1"
+                    )
                 )
             )
         }

@@ -65,7 +65,9 @@ class NtfsRebuildTest {
     fun `rebuild writes one full-size ntfs volume and adds no partition entry`() {
         val device = DriveImages.hopelessNtfsPartition()
 
-        val repair = PartitionRepair.repairDevice(device, allowRisky = true, allowDataLoss = true)
+        val repair = PartitionRepair.repairDevice(
+            device, allowRisky = false, allowDataLoss = true, targetFindingId = "ntfs-rebuild-1"
+        )
         assertTrue(finding(repair, "ntfs-rebuild-1").getBoolean("applied"))
 
         // A real NTFS volume, at the partition's own start and full length.
@@ -91,7 +93,9 @@ class NtfsRebuildTest {
     @Test
     fun `rebuilt partition passes a fresh scan`() {
         val device = DriveImages.hopelessNtfsPartition()
-        PartitionRepair.repairDevice(device, allowRisky = true, allowDataLoss = true)
+        PartitionRepair.repairDevice(
+            device, allowRisky = false, allowDataLoss = true, targetFindingId = "ntfs-rebuild-1"
+        )
 
         val after = ids(PartitionRepair.scanDevice(device))
         assertFalse(after.contains("ntfs-rebuild-1"))
@@ -107,7 +111,20 @@ class NtfsRebuildTest {
         device.put(PART_START, broken)
         device.put(PART_START + DriveImages.PART_SECTORS - 1, broken)
 
-        val repair = PartitionRepair.repairDevice(device, allowRisky = true, allowDataLoss = true)
+        val repair = PartitionRepair.repairDevice(
+            device, allowRisky = false, allowDataLoss = true, targetFindingId = "ntfs-rebuild-1"
+        )
         assertFalse(ids(repair).contains("ntfs-rebuild-1"))
+    }
+
+    @Test
+    fun `data-loss permission without the selected finding never rebuilds`() {
+        val device = DriveImages.hopelessNtfsPartition()
+        val before = device.sector(PART_START).copyOf()
+
+        val repair = PartitionRepair.repairDevice(device, allowRisky = true, allowDataLoss = true)
+
+        assertFalse(finding(repair, "ntfs-rebuild-1").getBoolean("applied"))
+        assertArrayEquals(before, device.sector(PART_START))
     }
 }

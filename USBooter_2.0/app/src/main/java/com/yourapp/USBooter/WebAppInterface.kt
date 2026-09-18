@@ -346,7 +346,13 @@ class WebAppInterface(private val activity: MainActivity) {
      * partition are erased, the rest of the drive is untouched.
      */
     @JavascriptInterface
-    fun repairPartitions(deviceName: String, allowRisky: Boolean, deep: Boolean, allowDataLoss: Boolean) {
+    fun repairPartitions(
+        deviceName: String,
+        allowRisky: Boolean,
+        deep: Boolean,
+        allowDataLoss: Boolean,
+        targetFindingId: String
+    ) {
         if (com.yourapp.USBooter.service.FormatService.isRunning) {
             showToast("A flash is running - wait for it to finish")
             return
@@ -360,6 +366,7 @@ class WebAppInterface(private val activity: MainActivity) {
                     allowRisky,
                     deep,
                     allowDataLoss,
+                    targetFindingId,
                     { repairCancelled }
                 ) { pct, detail -> post("onRepairProgress($pct, ${quote(detail)})") }
             }.getOrElse {
