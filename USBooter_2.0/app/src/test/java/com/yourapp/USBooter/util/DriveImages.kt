@@ -90,12 +90,21 @@ object DriveImages {
         return s
     }
 
-    /** A minimal MFT record: the engine only looks for the "FILE" magic. */
+    /**
+     * A plausible MFT record: the engine checks the update-sequence array and the
+     * record lengths, not just the "FILE" magic, so the fixture supplies them.
+     */
     fun mftRecord(): ByteArray {
         val s = ByteArray(512)
         System.arraycopy("FILE".toByteArray(Charsets.US_ASCII), 0, s, 0, 4)
+        le(s, 4, 48L, 2)    // update-sequence array offset
+        le(s, 6, 3L, 2)     // update-sequence array entries
+        le(s, 20, 56L, 2)   // first attribute offset, past the sequence array
+        le(s, 24, 400L, 4)  // bytes used
+        le(s, 28, 1024L, 4) // bytes allocated
         return s
     }
+
 
     /** MBR drive holding one intact NTFS partition, boot-sector copy and MFT included. */
     fun healthyNtfsDrive(): FakeBlockDevice {
