@@ -96,18 +96,35 @@ def sparse_run(rec, attr_off, clusters, size_bytes):
 
 
 def find_attr(rec, wanted):
+    """Offset of the LAST non-resident attribute of this type.
+
+    $BadClus carries two $DATA attributes (an empty resident one and the named
+    non-resident "$Bad"); only the non-resident one holds a runlist.
+    """
     off = struct.unpack_from("<H", rec, 20)[0]
+    found = None
     while off + 8 < len(rec):
         atype = struct.unpack_from("<I", rec, off)[0]
         if atype == 0xFFFFFFFF:
-            return None
+            break
         alen = struct.unpack_from("<I", rec, off + 4)[0]
         if alen <= 0:
-            return None
-        if atype == wanted:
-            return off
+            break
+        if atype == wanted and rec[off + 8] == 1:
+            found = off
         off += alen
-    return None
+    if found is None:
+        raise SystemExit("no non-resident attribute %#x in record" % wanted)
+    return found
+
+
+def close_record(rec, attr_off):
+    """Puts the end marker after the patched attribute and fixes the used size."""
+    alen = struct.unpack_from("<I", rec, attr_off + 4)[0]
+    end = attr_off + alen
+    struct.pack_into("<I", rec, end, 0xFFFFFFFF)
+    struct.pack_into("<I", rec, end + 4, 0)
+    struct.pack_into("<I", rec, 24, end + 8)
 
 
 def build(template, out, part_sectors):
@@ -152,11 +169,13 @@ def build(template, out, part_sectors):
     rec = bytearray(mft_bytes[BITMAP_REC * REC:(BITMAP_REC + 1) * REC])
     a = find_attr(rec, 0x80)
     nonresident_run(rec, a, bitmap_lcn, bitmap_clusters, bitmap_bytes)
+    close_record(rec, a)
     mft_bytes[BITMAP_REC * REC:(BITMAP_REC + 1) * REC] = rec
 
     rec = bytearray(mft_bytes[BADCLUS_REC * REC:(BADCLUS_REC + 1) * REC])
     a = find_attr(rec, 0x80)
     sparse_run(rec, a, clusters, clusters * cluster)
+    close_record(rec, a)
     mft_bytes[BADCLUS_REC * REC:(BADCLUS_REC + 1) * REC] = rec
 
     w(mft_lcn * spr, mft_bytes)
