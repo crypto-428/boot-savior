@@ -43,25 +43,40 @@ def patch_len(rec, off, alen):
     struct.pack_into("<I", rec, off + 4, alen)
 
 
-def nonresident_run(rec, attr_off, lcn, clusters, real_bytes):
-    """Rewrites a non-resident attribute to hold exactly one run."""
+def enc_signed(v):
+    n = 1
+    while not (-(1 << (8 * n - 1)) <= v < (1 << (8 * n - 1))):
+        n += 1
+    return v.to_bytes(n, "little", signed=True)
+
+
+def enc_unsigned(v):
+    n = max(1, (v.bit_length() + 8) // 8)
+    return v.to_bytes(n, "little")
+
+
+def encode_run(length, lcn):
+    """One data run: header nibbles then the length and the signed LCN delta."""
+    lb, ob = enc_unsigned(length), enc_signed(lcn)
+    return bytes([(len(ob) << 4) | len(lb)]) + lb + ob
+
+
+def write_runlist(rec, attr_off, run):
     run_off = struct.unpack_from("<H", rec, attr_off + 32)[0]
+    run = bytearray(run) + b"\x00"
+    run += b"\x00" * ((-len(run)) % 8)
+    rec[attr_off + run_off:attr_off + run_off + len(run)] = run
+    patch_len(rec, attr_off, run_off + len(run))
+
+
+def nonresident_run(rec, attr_off, lcn, clusters, real_bytes):
+    """Rewrites a non-resident attribute to hold exactly one mapped run."""
     struct.pack_into("<Q", rec, attr_off + 16, 0)               # startVCN
     struct.pack_into("<Q", rec, attr_off + 24, clusters - 1)    # lastVCN
     struct.pack_into("<Q", rec, attr_off + 40, clusters * 4096) # allocated
     struct.pack_into("<Q", rec, attr_off + 48, real_bytes)      # real size
     struct.pack_into("<Q", rec, attr_off + 56, real_bytes)      # initialised
-    run = bytearray()
-    run.append(0x11 if clusters < 0x100 else (0x22 if clusters < 0x10000 else 0x44))
-    lsize = run[0] & 0x0F
-    run += clusters.to_bytes(lsize, "little")
-    run += lcn.to_bytes(lsize, "little")
-    run.append(0)
-    end = attr_off + run_off + len(run)
-    pad = (-end) % 8
-    run += b"\x00" * pad
-    rec[attr_off + run_off:attr_off + run_off + len(run)] = run
-    patch_len(rec, attr_off, run_off + len(run))
+    write_runlist(rec, attr_off, encode_run(clusters, lcn))
 
 
 def sparse_run(rec, attr_off, clusters, size_bytes):
@@ -70,11 +85,8 @@ def sparse_run(rec, attr_off, clusters, size_bytes):
     struct.pack_into("<Q", rec, attr_off + 40, clusters * 4096)
     struct.pack_into("<Q", rec, attr_off + 48, size_bytes)
     struct.pack_into("<Q", rec, attr_off + 56, 0)
-    run_off = struct.unpack_from("<H", rec, attr_off + 32)[0]
-    run = bytearray([0x04]) + clusters.to_bytes(4, "little") + b"\x00"
-    run += b"\x00" * ((-(len(run))) % 8)
-    rec[attr_off + run_off:attr_off + run_off + len(run)] = run
-    patch_len(rec, attr_off, run_off + len(run))
+    lb = enc_unsigned(clusters)
+    write_runlist(rec, attr_off, bytes([len(lb)]) + lb)
 
 
 def find_attr(rec, wanted):
