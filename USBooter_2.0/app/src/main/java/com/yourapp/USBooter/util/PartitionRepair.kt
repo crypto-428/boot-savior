@@ -1118,7 +1118,11 @@ object PartitionRepair {
             "NTFS rebuild verification failed: ${ntfsBootProblems(main, part, device.blockSize).joinToString(", ")}"
         }
         require(main.contentEquals(backup)) { "NTFS rebuild verification failed: the backup boot sector does not match" }
-        require(le64(main, 40) == part.sectors) { "NTFS rebuild verification failed: the volume size is incorrect" }
+        // Real NTFS records one sector less than the partition holds: the last
+        // sector is the backup boot sector and sits outside the cluster area.
+        require(le64(main, 40) == part.sectors || le64(main, 40) == part.sectors - 1) {
+            "NTFS rebuild verification failed: the volume size is incorrect"
+        }
         require(ntfsRecordAt(device, main, part, 48)) { "NTFS rebuild verification failed: the master file table is unreadable" }
         require(ntfsRecordAt(device, main, part, 56)) { "NTFS rebuild verification failed: the mirror file table is unreadable" }
 
