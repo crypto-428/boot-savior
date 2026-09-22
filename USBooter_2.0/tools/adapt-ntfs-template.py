@@ -107,13 +107,13 @@ def build(template, out, part_sectors):
 
     # 1. Metadata clusters, verbatim.
     o = data_off
-    mft_bytes = None
     for lcn, length in runs:
         chunk = blob[o:o + length * cluster]
         o += length * cluster
-        if lcn == mft_lcn:
-            mft_bytes = bytearray(chunk)
         w(lcn * spr, chunk)
+    f.flush()
+    f.seek(mft_lcn * spr * SECTOR)
+    mft_bytes = bytearray(f.read(16 * REC))
 
     # 2. Boot sector: real size + fresh serial, main copy and backup.
     f.flush()
