@@ -98,7 +98,7 @@ def build(template, out, part_sectors):
     spr = cluster // bps
     clusters = (part_sectors - 1) // spr   # the last sector holds the boot backup
 
-    f = open(out, "wb")
+    f = open(out, "w+b")
     f.truncate(part_sectors * SECTOR)
 
     def w(lba, data):
