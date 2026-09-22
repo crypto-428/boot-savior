@@ -116,9 +116,9 @@ def build(template, out, part_sectors):
         w(lcn * spr, chunk)
 
     # 2. Boot sector: real size + fresh serial, main copy and backup.
-    boot = bytearray(blob[data_off:data_off + bps]) if runs[0][0] == 0 else None
+    f.flush()
     f.seek(0)
-    boot = bytearray(open(out, "rb+").read(bps)) if boot is None else boot
+    boot = bytearray(f.read(bps))
     struct.pack_into("<Q", boot, 40, part_sectors - 1)
     serial = int.from_bytes(os.urandom(8), "little")
     struct.pack_into("<Q", boot, 72, serial)
