@@ -28,6 +28,15 @@ object NtfsFormatter {
         require(partitionSectorCount * bytesPerSector >= MIN_VOLUME_BYTES) {
             "NTFS partition is too small; at least ${MIN_VOLUME_BYTES / (1024 * 1024)} MiB is required"
         }
+
+        // Preferred path: stamp out a copy of a genuine Windows-made NTFS volume and
+        // recompute only the size-dependent structures. It adapts to any partition
+        // size and is what Windows itself accepts; the hand-built structures below
+        // stay as a fallback for geometries the packed volume cannot serve.
+        if (NtfsTemplate.supports(bytesPerSector, partitionSectorCount)) {
+            NtfsTemplate.format(device, partitionStartLba, partitionSectorCount)
+            return
+        }
         val sectorsPerCluster = maxOf(1, 4096 / bytesPerSector)
         val clusterSize = sectorsPerCluster * bytesPerSector
         val indexBlockSize = maxOf(INDEX_BLOCK_SIZE, clusterSize)
