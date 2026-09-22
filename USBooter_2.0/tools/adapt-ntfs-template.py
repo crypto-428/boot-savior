@@ -62,11 +62,17 @@ def encode_run(length, lcn):
 
 
 def write_runlist(rec, attr_off, run):
+    """Writes a runlist in place; the record must keep its exact size."""
+    size = len(rec)
     run_off = struct.unpack_from("<H", rec, attr_off + 32)[0]
     run = bytearray(run) + b"\x00"
     run += b"\x00" * ((-len(run)) % 8)
-    rec[attr_off + run_off:attr_off + run_off + len(run)] = run
+    at = attr_off + run_off
+    if at + len(run) > size:
+        raise SystemExit("runlist does not fit in the MFT record")
+    rec[at:at + len(run)] = run
     patch_len(rec, attr_off, run_off + len(run))
+    del rec[size:]
 
 
 def nonresident_run(rec, attr_off, lcn, clusters, real_bytes):
