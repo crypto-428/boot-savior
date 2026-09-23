@@ -34,7 +34,7 @@ object NtfsFormatter {
         // size and is what Windows itself accepts; the hand-built structures below
         // stay as a fallback for geometries the packed volume cannot serve.
         if (NtfsTemplate.supports(bytesPerSector, partitionSectorCount)) {
-            NtfsTemplate.format(device, partitionStartLba, partitionSectorCount)
+            NtfsTemplate.format(device, partitionStartLba, partitionSectorCount, volumeLabel)
             return
         }
         val sectorsPerCluster = maxOf(1, 4096 / bytesPerSector)

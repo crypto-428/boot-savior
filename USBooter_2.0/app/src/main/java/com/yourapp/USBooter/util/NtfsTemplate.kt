@@ -30,8 +30,16 @@ object NtfsTemplate {
     private const val RESOURCE = "/ntfs/ntfs-template.bin.gz"
     private const val MAGIC = "NTFSTPL2"
     private const val RECORD = 1024
+    private const val VOLUME_REC = 3
     private const val BITMAP_REC = 6
     private const val BADCLUS_REC = 8
+
+    /**
+     * Longest label written into \$VOLUME_NAME. NTFS allows 32 characters, and
+     * staying well inside the record's first sector keeps its update-sequence
+     * fixups (which live at every sector end) untouched.
+     */
+    private const val MAX_LABEL_CHARS = 32
     private const val MIRROR_LCN = 2L
     private const val MFT_ZONE_RECORDS = 64
 
@@ -87,7 +95,8 @@ object NtfsTemplate {
     fun format(
         device: BlockWriter,
         partitionStartLba: Long,
-        partitionSectorCount: Long
+        partitionSectorCount: Long,
+        volumeLabel: String = ""
     ) {
         val t = load()
         val bps = device.blockSize
@@ -151,6 +160,8 @@ object NtfsTemplate {
             sparseRun(rec, a, clusters, clusters * cluster, cluster)
             closeRecord(rec, a)
         }
+        // 3b. The name the user typed replaces the reference volume's label.
+        patchRecord(mftBytes, VOLUME_REC) { rec -> setVolumeLabel(rec, volumeLabel) }
         write(t.mftLcn * spr, mftBytes)
 
         // 4. $MFTMirr: the first four records, at cluster 2.
@@ -299,6 +310,53 @@ object NtfsTemplate {
         }
         require(found >= 0) { "the NTFS template record has no non-resident attribute $wantedType" }
         return found
+    }
+
+    /**
+     * Replaces the \$VOLUME_NAME of the \$Volume record with the chosen label.
+     * The attribute grows or shrinks, so everything after it is shifted and the
+     * record's used size is corrected. A blank label leaves the reference name.
+     */
+    private fun setVolumeLabel(rec: ByteArray, label: String) {
+        val clean = label.trim().take(MAX_LABEL_CHARS)
+        if (clean.isEmpty()) return
+        val name = clean.toByteArray(Charsets.UTF_16LE)
+
+        var off = le16(rec, 20)
+        var nameOff = -1
+        var nameLen = 0
+        while (off + 8 < rec.size) {
+            val type = le32(rec, off).toInt()
+            if (type == -1) break
+            val len = le32(rec, off + 4).toInt()
+            if (len <= 0) break
+            if (type == 0x60 && rec[off + 8].toInt() == 0) {
+                nameOff = off
+                nameLen = len
+                break
+            }
+            off += len
+        }
+        if (nameOff < 0) return                              // no label attribute: leave as is
+
+        val contentOff = le16(rec, nameOff + 20)
+        var newLen = contentOff + name.size
+        newLen += (8 - newLen % 8) % 8
+        val used = le32(rec, 24).toInt()
+        val newUsed = used - nameLen + newLen
+        // Never let the attribute area reach the first sector's fixup bytes.
+        if (newUsed + 8 > 500 || newUsed > rec.size) return
+
+        val tail = rec.copyOfRange(nameOff + nameLen, used)
+        val attr = ByteArray(newLen)
+        System.arraycopy(rec, nameOff, attr, 0, contentOff)   // attribute header
+        System.arraycopy(name, 0, attr, contentOff, name.size)
+        putLe32(attr, 4, newLen.toLong())                    // attribute length
+        putLe32(attr, 16, name.size.toLong())                // content length
+        System.arraycopy(attr, 0, rec, nameOff, newLen)
+        System.arraycopy(tail, 0, rec, nameOff + newLen, tail.size)
+        for (i in (nameOff + newLen + tail.size) until rec.size) rec[i] = 0
+        putLe32(rec, 24, newUsed.toLong())                    // the tail already ends with the record's end marker
     }
 
     private fun nonResidentRun(
