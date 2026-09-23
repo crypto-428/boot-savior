@@ -341,6 +341,15 @@
   .scroll-content::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
 
   /* ── Drive Card ── */
+  @keyframes usbPlugIn{
+    0%{opacity:0; transform:translateX(-48px) scale(0.7);}
+    60%{opacity:1; transform:translateX(4px) scale(1.05);}
+    100%{opacity:1; transform:translateX(0) scale(1);}
+  }
+  @keyframes driveCardIn{
+    from{opacity:0; transform:translateY(14px);}
+    to{opacity:1; transform:translateY(0);}
+  }
   .drivecard{
     border:1.5px solid var(--border-dark);
     background:var(--card-bg);
@@ -352,6 +361,16 @@
     flex-shrink:0;
     overflow: hidden;
     max-height: 80px;
+    animation:driveCardIn .35s ease-out both;
+  }
+  .drivecard .usb-icon{
+    position:absolute;
+    top:14px;
+    right:14px;
+    font-size:22px;
+    line-height:1;
+    opacity:0;
+    animation:usbPlugIn .5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
   .drivecard:hover{
     background:var(--card-hover);
