@@ -1686,12 +1686,14 @@
       return;
     }
 
-    devices.forEach(d => {
+    devices.forEach((d, i) => {
       const card = document.createElement('div');
       card.className = 'drivecard';
       card.id = 'drive-' + d.deviceName.replace(/\//g, '-');
+      card.style.animationDelay = (i * 0.12) + 's';
       card.onclick = () => selectDriveUI(card, d);
       card.innerHTML = `
+        <span class="usb-icon" style="animation-delay:${0.15 + i * 0.12}s">🔌</span>
         <div class="name">${d.name}</div>
         <div class="meta">${d.deviceName}</div>
         <div class="details">
