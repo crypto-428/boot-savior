@@ -30,8 +30,16 @@ object NtfsTemplate {
     private const val RESOURCE = "/ntfs/ntfs-template.bin.gz"
     private const val MAGIC = "NTFSTPL2"
     private const val RECORD = 1024
+    private const val VOLUME_REC = 3
     private const val BITMAP_REC = 6
     private const val BADCLUS_REC = 8
+
+    /**
+     * Longest label written into \$VOLUME_NAME. NTFS allows 32 characters, and
+     * staying well inside the record's first sector keeps its update-sequence
+     * fixups (which live at every sector end) untouched.
+     */
+    private const val MAX_LABEL_CHARS = 32
     private const val MIRROR_LCN = 2L
     private const val MFT_ZONE_RECORDS = 64
 
