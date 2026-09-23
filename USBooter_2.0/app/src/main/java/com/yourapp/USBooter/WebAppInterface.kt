@@ -102,7 +102,7 @@ class WebAppInterface(private val activity: MainActivity) {
                 )
             }
 
-            val config = LayoutConfig(partitions, tableType)
+            val config = LayoutConfig(partitions, tableType, json.optBoolean("deepFormat", false))
             val errors = config.validate()
             if (errors.isNotEmpty()) {
                 activity.showToast(errors.first())
