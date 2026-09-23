@@ -316,6 +316,7 @@
       repair_cancel: 'Cancel',
       repair_open: '🛠 Repair partitions (without formatting)',
       repair_screen_title: 'Repair partitions',
+      deep_format: '🧹 Deep format (erase every sector — much slower, works with every filesystem)',
       manage_drive: '⚙ Manage drive',
       mgmt_title: 'Drive management',
       mgmt_tab_repair: 'Repair',
@@ -634,6 +635,7 @@
       repair_cancel: 'Annulla',
       repair_open: '🛠 Ripara le partizioni (senza formattare)',
       repair_screen_title: 'Ripara le partizioni',
+      deep_format: '🧹 Formattazione profonda (cancella ogni settore — molto più lenta, funziona con ogni filesystem)',
       manage_drive: '⚙ Gestisci unità',
       mgmt_title: 'Gestione unità',
       mgmt_tab_repair: 'Ripara',
@@ -952,6 +954,7 @@
       repair_cancel: 'Cancelar',
       repair_open: '🛠 Reparar particiones (sin formatear)',
       repair_screen_title: 'Reparar particiones',
+      deep_format: '🧹 Formateo profundo (borra cada sector — mucho más lento, funciona con todos los sistemas de archivos)',
       manage_drive: '⚙ Gestionar unidad',
       mgmt_title: 'Gestión de la unidad',
       mgmt_tab_repair: 'Reparar',
@@ -1270,6 +1273,7 @@
       repair_cancel: 'Cancelar',
       repair_open: '🛠 Reparar partições (sem formatar)',
       repair_screen_title: 'Reparar partições',
+      deep_format: '🧹 Formatação profunda (apaga cada setor — bem mais lenta, funciona com todos os sistemas de arquivos)',
       manage_drive: '⚙ Gerenciar unidade',
       mgmt_title: 'Gerenciamento da unidade',
       mgmt_tab_repair: 'Reparar',
@@ -1588,6 +1592,7 @@
       repair_cancel: '取消',
       repair_open: '🛠 修复分区（无需格式化）',
       repair_screen_title: '修复分区',
+      deep_format: '🧹 深度格式化（擦除每个扇区——速度慢得多，适用于所有文件系统）',
       manage_drive: '⚙ 管理驱动器',
       mgmt_title: '驱动器管理',
       mgmt_tab_repair: '修复',
@@ -1629,6 +1634,10 @@
    * when the language is English.
    */
   var NATIVE_RULES = [
+    [/^Deep format: erasing the whole drive \((\d+)%\)$/,
+      { it: 'Formattazione profonda: cancellazione dell\'intera unità ({1}%)', es: 'Formateo profundo: borrando toda la unidad ({1}%)', pt: 'Formatação profunda: apagando a unidade inteira ({1}%)', zh: '深度格式化：正在擦除整个驱动器（{1}%）' }],
+    [/^Erased (\d+) MB of (\d+) MB$/,
+      { it: 'Cancellati {1} MB su {2} MB', es: 'Borrados {1} MB de {2} MB', pt: 'Apagados {1} MB de {2} MB', zh: '已擦除 {1} MB / {2} MB' }],
     // ── Partition editor (PartitionManager.kt) ─────────────────────────────
     [/^(\d+) partition\(s\) on this drive$/,
       { it: '{1} partizione/i su questa unità', es: '{1} partición(es) en esta unidad', pt: '{1} partição(ões) nesta unidade', zh: '此驱动器上有 {1} 个分区' }],

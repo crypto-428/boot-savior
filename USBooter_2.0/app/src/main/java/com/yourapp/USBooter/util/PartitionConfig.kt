@@ -38,7 +38,9 @@ data class PartitionDefinition(
  */
 data class LayoutConfig(
     val partitions: List<PartitionDefinition>,
-    val tableType: PartitionTableType = PartitionTableType.MBR
+    val tableType: PartitionTableType = PartitionTableType.MBR,
+    /** Deep format: overwrite every sector with zeros before partitioning (slow, any filesystem). */
+    val deepFormat: Boolean = false
 ) : Serializable {
 
     /**
