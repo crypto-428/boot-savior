@@ -1056,8 +1056,6 @@
         </div>
       </div>
 
-      <button class="btn" id="openRepairBtn" onclick="openRepair()" style="width:100%;margin-top:4px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_open">🛠 Repair partitions (without formatting)</button>
-
       <div class="btnrow">
         <button class="btn ghost" onclick="rescanDrives()" data-i18n="rescan">⟳ Rescan</button>
         <button class="btn primary" id="nextToStep2" onclick="goToStep(2)" disabled data-i18n="next">Next →</button>
@@ -1361,7 +1359,6 @@
 
         <button class="btn" id="preflightBtn" onclick="runPreflight()" style="width:100%;margin-top:12px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="run_preflight">Run preflight self-test</button>
         <button class="btn" id="reverifyBtn" onclick="rerunVerification()" style="display:none;width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="rerun_verify">Re-run verification (no reflash)</button>
-        <button class="btn" id="repairScanBtn" onclick="openRepair()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_open">🛠 Repair partitions (without formatting)</button>
         <button class="btn" id="exportReportBtn" onclick="exportReport()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="export_report">Export verification report</button>
         <button class="btn" onclick="showTechnicalLog()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="view_log">View technical log</button>
         <button class="btn" onclick="saveLogFile()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="save_log">Save detailed log to file</button>
@@ -1378,12 +1375,20 @@
 
     <!-- ═══ SCREEN 4: STANDALONE PARTITION REPAIR ═══ -->
     <div class="screen-content" id="step4">
-      <div class="label" data-i18n="repair_screen_title">Repair partitions</div>
+      <div class="label" data-i18n="mgmt_title">Drive management</div>
 
       <div class="scroll-content">
+        <div class="toggle-group" id="mgmtTabs">
+          <div class="toggle-opt active" onclick="setMgmtTab(this, 'repair')" data-i18n="mgmt_tab_repair">Repair</div>
+          <div class="toggle-opt" onclick="setMgmtTab(this, 'edit')" data-i18n="mgmt_tab_edit">Partitions</div>
+          <div class="toggle-opt" onclick="setMgmtTab(this, 'tools')" data-i18n="mgmt_tab_tools">Tools</div>
+        </div>
         <div class="info-card">
           <div class="row"><span class="k" data-i18n="drive">Drive</span><span class="v" id="repairDrive">...</span></div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:left;" data-i18n="repair_intro">
+        </div>
+        <div class="mgmt-sec" id="mgmt-repair">
+        <div class="info-card" style="margin-top:12px;">
+          <div style="font-size:12px;color:var(--text-muted);text-align:left;" data-i18n="repair_intro">
             This checks the partition table and the filesystem headers without writing anything. Repairs that can be made from a spare copy already on the drive keep every file; repairs without a spare copy are marked and need your confirmation.
           </div>
         </div>
@@ -1413,11 +1418,12 @@
 
         <button class="btn primary" id="repairStartBtn" onclick="scanPartitions()" style="width:100%;margin-top:12px;" data-i18n="repair_scan">Check &amp; repair partitions (no data loss)</button>
         <button class="btn" id="repairCancelBtn" onclick="cancelRepairScan()" style="display:none;width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="repair_stop_scan">■ Stop scanning</button>
-        <button class="btn" onclick="exportReport()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="export_report">Export verification report</button>
         <button class="btn danger" id="repairWipeBtn" onclick="confirmDestructiveRebuild()" style="width:100%;margin-top:16px;" data-i18n="repair_wipe">⚠ Last resort: rebuild the drive and erase all files</button>
 
+        </div>
         <!-- Partition editor: change the existing layout without reformatting. -->
-        <div class="info-card" style="margin-top:18px;">
+        <div class="mgmt-sec" id="mgmt-edit" style="display:none;">
+        <div class="info-card" style="margin-top:12px;">
           <div style="font-weight:600;color:var(--text);margin-bottom:6px;" data-i18n="pe_title">Edit partitions</div>
           <div style="font-size:12px;color:var(--text-muted);text-align:left;" data-i18n="pe_intro">
             Make a partition smaller or bigger, remove one, or use free space for a new one. Files are never moved, so anything that would need moving files is refused with the reason.
@@ -1427,6 +1433,13 @@
           <div id="peFree" style="display:none;margin-top:8px;text-align:left;font-size:12px;color:var(--text-muted);"></div>
           <button class="btn" id="peLoadBtn" onclick="loadPartitionEditor()" style="width:100%;margin-top:10px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="pe_load">Show current partitions</button>
           <button class="btn" id="peCreateBtn" onclick="askCreatePartition()" style="display:none;width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="pe_create">Create a partition in the free space</button>
+        </div>
+        </div>
+        <div class="mgmt-sec" id="mgmt-tools" style="display:none;">
+          <button class="btn" onclick="exportReport()" style="width:100%;margin-top:12px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="export_report">Export verification report</button>
+          <button class="btn" onclick="showTechnicalLog()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="view_log">View technical log</button>
+          <button class="btn" onclick="saveLogFile()" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="save_log">Save detailed log to file</button>
+          <button class="btn" onclick="goToStep(2)" style="width:100%;margin-top:8px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="mgmt_format">Format or make bootable →</button>
         </div>
 
 
@@ -1656,6 +1669,13 @@
 
   // Standalone repair screen: reachable straight from the drive list, so a
   // damaged stick can be checked and fixed without ever formatting it.
+  function setMgmtTab(el, tab) {
+    document.querySelectorAll('#mgmtTabs .toggle-opt').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.mgmt-sec').forEach(sec => sec.style.display = sec.id === 'mgmt-' + tab ? '' : 'none');
+    if (tab === 'edit' && typeof loadPartitionEditor === 'function' && !document.getElementById('peList').innerHTML) loadPartitionEditor();
+  }
+
   function openRepair() {
     if (!state.selectedDeviceName) { showToast(t('repair_no_drive')); return; }
     const el = document.getElementById('repairDrive');
@@ -1700,9 +1720,11 @@
           <div class="detail-row"><span class="detail-k">${t('capacity')}</span><span class="detail-v" id="size-${card.id}">${d.sizeHuman || '...'}</span></div>
           <div class="detail-row"><span class="detail-k">${t('vendor_id')}</span><span class="detail-v">${d.vendorId}</span></div>
           <div class="detail-row"><span class="detail-k">${t('product_id')}</span><span class="detail-v">${d.productId}</span></div>
-          <button class="btn ghost small" style="margin-top:10px; width:100%; border-color:var(--text-light); color:var(--text-light);" onclick="event.stopPropagation(); safelyRemove('${d.deviceName}')">${t('safely_remove')}</button>
+          <button class="btn ghost small manage-btn" style="margin-top:10px; width:100%; border-color:var(--text-light); color:var(--text-light);">${t('manage_drive')}</button>
+          <button class="btn ghost small" style="margin-top:6px; width:100%; border-color:var(--text-light); color:var(--text-light);" onclick="event.stopPropagation(); safelyRemove('${d.deviceName}')">${t('safely_remove')}</button>
         </div>
       `;
+      card.querySelector('.manage-btn').onclick = (ev) => { ev.stopPropagation(); selectDriveUI(card, d); openRepair(); };
       list.appendChild(card);
     });
   }
