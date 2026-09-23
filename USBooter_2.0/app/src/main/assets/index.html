@@ -90,8 +90,8 @@
     --text-light:#909bb0;
     --border:#1a2340;
     --border-dark:#e0e6f0;
-    --accent:#8b98b8;
-    --accent-hover:#adb9d8;
+    --accent:#ff8a4c;
+    --accent-hover:#ffa472;
     --accent-bg:#1e2a4a;
     --danger:#ff5566;
     --danger-hover:#ff3344;
@@ -379,7 +379,7 @@
   .drivecard.selected{
     border-color:var(--accent);
     background:var(--card-hover);
-    max-height: 200px;
+    max-height: 360px;
   }
   .drivecard .name{
     font-weight:700;
@@ -517,6 +517,7 @@
     background:var(--danger);
     color:#fff;
   }
+  body.dark .btn.ghost-danger:hover{color:#3a0006;}
 
   /* ── Toggle Group ── */
   .toggle-group{
@@ -1215,7 +1216,7 @@
             <input type="checkbox" id="deepFormat">
             <span data-i18n="deep_format">🧹 Deep format (erase every sector — much slower, works with every filesystem)</span>
           </label>
-          <div class="label" style="margin-bottom:6px;" data-i18n="table_format">Table Format</div>
+          <div class="label" style="margin:14px 0 6px;" data-i18n="table_format">Table Format</div>
           <div class="toggle-group" id="tableToggle">
             <div class="toggle-opt active" onclick="switchTable(this, 'MBR')">MBR</div>
             <div class="toggle-opt" onclick="switchTable(this, 'GPT')">GPT</div>
@@ -1223,7 +1224,7 @@
         </div>
 
         <div>
-          <div class="label" style="margin-bottom:6px;" data-i18n="partition_scheme">Partition Scheme</div>
+          <div class="label" style="margin:14px 0 6px;" data-i18n="partition_scheme">Partition Scheme</div>
           <div class="toggle-group" id="schemeToggle">
             <div class="toggle-opt active" onclick="switchScheme(this, 'single')" data-i18n="single">Single</div>
             <div class="toggle-opt" onclick="switchScheme(this, 'dual')" data-i18n="dual">Dual</div>
@@ -1234,7 +1235,7 @@
         </div>
 
         <div id="singleConfig">
-          <div class="label" style="margin-bottom:6px;" data-i18n="file_system">File System</div>
+          <div class="label" style="margin:14px 0 6px;" data-i18n="file_system">File System</div>
           <div class="toggle-group" id="fsToggle">
             <div class="toggle-opt active" onclick="switchFS(this, 'FAT32')">FAT32</div>
             <div class="toggle-opt" onclick="switchFS(this, 'exFAT')">exFAT</div>
@@ -1331,7 +1332,7 @@
 
         <div class="alert">
           <span class="icon">⚠</span>
-          <span data-i18n="erase_warning_1">All data on this drive will be</span> <strong data-i18n="erase_warning_2">permanently erased</strong>.
+          <span style="flex:1;min-width:0;"><span data-i18n="erase_warning_1">All data on this drive will be</span> <strong data-i18n="erase_warning_2">permanently erased</strong>.</span>
         </div>
 
         <div>
