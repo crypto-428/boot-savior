@@ -6,8 +6,8 @@ Windows, so its root directory contained "$RECYCLE.BIN" and
 "System Volume Information".  Every volume written from the template
 inherited them.  This tool rewrites the packed image in place:
 
-  * the root directory becomes a genuinely empty small index
-    (its $INDEX_ALLOCATION / $BITMAP attributes are dropped)
+  * those two entries are deleted from the root directory index
+    (the NTFS metadata entries in the root stay untouched)
   * the MFT records of those folders and their children are freed
   * the $MFT bitmap bits for the freed records are cleared
 
@@ -76,48 +76,40 @@ def attributes(rec):
     return out
 
 
-def empty_root_index(rec):
-    """Drops $INDEX_ALLOCATION/$BITMAP and empties $INDEX_ROOT."""
-    attrs = attributes(rec)
-    first = u16(rec, 20)
-    kept = []
-    for t, off, length in attrs:
-        if t in (0xA0, 0xB0):
-            continue
-        blob = bytearray(rec[off:off + length])
-        if t == 0x90:
-            content_off = u16(blob, 20)
-            body = bytearray(blob[content_off:content_off + u32(blob, 16)])
-            # index root header: 16 bytes, then the index header
-            entries_off = 16
-            struct.pack_into('<I', body, 16, entries_off)          # entries offset
-            struct.pack_into('<I', body, 20, entries_off + 16)     # index length
-            struct.pack_into('<I', body, 24, entries_off + 16)     # allocated
-            body[28] = 0                                           # small index
-            body[29:32] = b'\0\0\0'
-            entry = bytearray(16)
-            struct.pack_into('<H', entry, 8, 16)                   # entry length
-            struct.pack_into('<H', entry, 12, 0x02)                # last entry
-            body = body[:16 + entries_off] + entry
-            new = bytearray(blob[:content_off]) + body
-            while len(new) % 8:
-                new += b'\0'
-            struct.pack_into('<I', new, 4, len(new))               # attribute length
-            struct.pack_into('<I', new, 16, len(body))             # content length
-            blob = new
-        kept.append(blob)
+JUNK_NAMES = ('$RECYCLE.BIN', 'System Volume Information')
 
-    out = bytearray(rec)
-    pos = first
-    for blob in kept:
-        out[pos:pos + len(blob)] = blob
-        pos += len(blob)
-    struct.pack_into('<I', out, pos, 0xFFFFFFFF)
-    struct.pack_into('<I', out, pos + 4, 0)
-    struct.pack_into('<I', out, 24, pos + 8)                       # bytes in use
-    for i in range(pos + 8, len(out)):
-        out[i] = 0
-    return out
+
+def strip_index_block(block, bps):
+    """Removes the junk directory entries from one INDX block."""
+    b = unprotect(block, bps)
+    entries_off = u32(b, 24)
+    index_len = u32(b, 28)
+    pos = 24 + entries_off
+    kept = bytearray()
+    removed = []
+    while pos < 24 + index_len:
+        length = u16(b, pos + 8)
+        key_len = u16(b, pos + 10)
+        flags = u16(b, pos + 12)
+        if length == 0:
+            break
+        name = ''
+        if key_len:
+            nl = b[pos + 16 + 64]
+            name = b[pos + 16 + 66:pos + 16 + 66 + nl * 2].decode('utf-16le')
+        if name in JUNK_NAMES and not (flags & 0x02):
+            removed.append(name)
+        else:
+            kept += b[pos:pos + length]
+        pos += length
+    if not removed:
+        return None, removed
+    out = bytearray(b)
+    at = 24 + entries_off
+    out[at:at + index_len - entries_off] = b'\0' * (index_len - entries_off)
+    out[at:at + len(kept)] = kept
+    struct.pack_into('<I', out, 28, entries_off + len(kept))
+    return protect(out, bps), removed
 
 
 def free_record(rec):
@@ -178,10 +170,24 @@ def main(path):
     def store(i, rec):
         raw[mft_off + i * RECORD:mft_off + (i + 1) * RECORD] = rec
 
-    # 1. empty the root directory
+    # 1. drop the junk entries from the root directory's index blocks
     root = unprotect(read(ROOT_RECORD), bps)
-    root = empty_root_index(root)
-    store(ROOT_RECORD, protect(root, bps))
+    alloc = None
+    for t, off, length in attributes(root):
+        if t == 0xA0:
+            alloc = root[off:off + length]
+    assert alloc is not None, 'the root directory has no $INDEX_ALLOCATION'
+    removed = []
+    for lcn, length in decode_runs(alloc):
+        for i in range(length):
+            at = offsets[lcn + i]
+            block = raw[at:at + cluster]
+            if block[:4] != b'INDX':
+                continue
+            patched, gone = strip_index_block(block, bps)
+            if patched is not None:
+                raw[at:at + cluster] = patched
+                removed += gone
 
     # 2. free the leftover folders and their files
     for i in JUNK_RECORDS:
@@ -202,7 +208,7 @@ def main(path):
 
     with gzip.open(path, 'wb', compresslevel=9) as out:
         out.write(bytes(raw))
-    print(f'cleaned {path}: root index emptied, records {JUNK_RECORDS} freed')
+    print(f'cleaned {path}: removed {removed}, freed MFT records {JUNK_RECORDS}')
 
 
 if __name__ == '__main__':
