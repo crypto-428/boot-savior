@@ -312,6 +312,55 @@ object NtfsTemplate {
         return found
     }
 
+    /**
+     * Replaces the \$VOLUME_NAME of the \$Volume record with the chosen label.
+     * The attribute grows or shrinks, so everything after it is shifted and the
+     * record's used size is corrected. A blank label leaves the reference name.
+     */
+    private fun setVolumeLabel(rec: ByteArray, label: String) {
+        val clean = label.trim().take(MAX_LABEL_CHARS)
+        if (clean.isEmpty()) return
+        val name = clean.toByteArray(Charsets.UTF_16LE)
+
+        var off = le16(rec, 20)
+        var nameOff = -1
+        var nameLen = 0
+        while (off + 8 < rec.size) {
+            val type = le32(rec, off).toInt()
+            if (type == -1) break
+            val len = le32(rec, off + 4).toInt()
+            if (len <= 0) break
+            if (type == 0x60 && rec[off + 8].toInt() == 0) {
+                nameOff = off
+                nameLen = len
+                break
+            }
+            off += len
+        }
+        if (nameOff < 0) return                              // no label attribute: leave as is
+
+        val contentOff = le16(rec, nameOff + 20)
+        var newLen = contentOff + name.size
+        newLen += (8 - newLen % 8) % 8
+        val used = le32(rec, 24).toInt()
+        val newUsed = used - nameLen + newLen
+        // Never let the attribute area reach the first sector's fixup bytes.
+        if (newUsed + 8 > 500 || newUsed > rec.size) return
+
+        val tail = rec.copyOfRange(nameOff + nameLen, used)
+        val attr = ByteArray(newLen)
+        System.arraycopy(rec, nameOff, attr, 0, minOf(nameLen, newLen).coerceAtMost(contentOff))
+        System.arraycopy(name, 0, attr, contentOff, name.size)
+        putLe32(attr, 4, newLen.toLong())                    // attribute length
+        putLe32(attr, 16, name.size.toLong())                // content length
+        System.arraycopy(attr, 0, rec, nameOff, newLen)
+        System.arraycopy(tail, 0, rec, nameOff + newLen, tail.size)
+        for (i in (nameOff + newLen + tail.size) until rec.size) rec[i] = 0
+        putLe32(rec, 24, newUsed.toLong())
+        putLe32(rec, nameOff + newLen + tail.size, 0xFFFFFFFFL)
+        putLe32(rec, nameOff + newLen + tail.size + 4, 0)
+    }
+
     private fun nonResidentRun(
         rec: ByteArray,
         attrOff: Int,
