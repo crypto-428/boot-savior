@@ -152,6 +152,8 @@ object NtfsTemplate {
             sparseRun(rec, a, clusters, clusters * cluster, cluster)
             closeRecord(rec, a)
         }
+        // 3b. The name the user typed replaces the reference volume's label.
+        patchRecord(mftBytes, VOLUME_REC) { rec -> setVolumeLabel(rec, volumeLabel) }
         write(t.mftLcn * spr, mftBytes)
 
         // 4. $MFTMirr: the first four records, at cluster 2.
