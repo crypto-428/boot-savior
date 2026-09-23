@@ -632,7 +632,14 @@ object PartitionRepair {
         return findings
     }
 
-    private data class Part(val index: Int, val start: Long, val sectors: Long, val typeByte: Int)
+    private data class Part(
+        val index: Int,
+        val start: Long,
+        val sectors: Long,
+        val typeByte: Int,
+        /** True when the entry comes from a GUID partition table instead of an MBR. */
+        val gpt: Boolean = false
+    )
 
     /** Partition ranges as the table describes them (MBR primaries, or GPT entries). */
     private fun partitions(
@@ -657,7 +664,7 @@ object PartitionRepair {
                 val first = le64(table, base + 32)
                 val last = le64(table, base + 40)
                 if (first <= 0 || last < first) { broken.add(i + 1); continue }
-                out.add(Part(i + 1, first, last - first + 1, -1))
+                out.add(Part(i + 1, first, last - first + 1, -1, gpt = true))
             }
             return out
         }
@@ -1102,7 +1109,7 @@ object PartitionRepair {
                 "destructive", repairable = true
             ) {
                 NtfsFormatter.format(device, part.start, part.sectors, "USBooter")
-                markMbrTypeNtfs(device, part)
+                if (part.gpt) markGptTypeBasicData(device, part) else markMbrTypeNtfs(device, part)
                 runCatching { device.synchronizeCache() }
                 verifyNtfsRebuild(device, part)
             }
@@ -1126,7 +1133,11 @@ object PartitionRepair {
         require(ntfsRecordAt(device, main, part, 48)) { "NTFS rebuild verification failed: the master file table is unreadable" }
         require(ntfsRecordAt(device, main, part, 56)) { "NTFS rebuild verification failed: the mirror file table is unreadable" }
 
-        if (part.typeByte >= 0) {
+        if (part.gpt) {
+            require(gptEntryIsBasicData(device, part)) {
+                "NTFS rebuild verification failed: the GPT entry does not identify the rebuilt volume as a Windows data partition"
+            }
+        } else if (part.typeByte >= 0) {
             val table = device.readBlocks(0, 1)
             val matchingSlot = (0 until 4).firstOrNull { slot ->
                 val base = 446 + slot * 16
@@ -1136,6 +1147,74 @@ object PartitionRepair {
                 "NTFS rebuild verification failed: the partition table does not identify the rebuilt volume as NTFS"
             }
         }
+    }
+
+    /** The GPT type GUID Windows expects on an NTFS volume, in on-disk byte order. */
+    private val BASIC_DATA_GUID = byteArrayOf(
+        0xA2.toByte(), 0xA0.toByte(), 0xD0.toByte(), 0xEB.toByte(),
+        0xE5.toByte(), 0xB9.toByte(), 0x33, 0x44,
+        0x87.toByte(), 0xC0.toByte(), 0x68, 0xB6.toByte(),
+        0xB7.toByte(), 0x26, 0x99.toByte(), 0xC7.toByte()
+    )
+
+    /**
+     * GPT counterpart of [markMbrTypeNtfs]: gives the rebuilt entry the Windows
+     * basic-data type and refreshes both copies of the table, including the
+     * checksums, so firmware and Windows accept it.
+     */
+    private fun markGptTypeBasicData(device: BlockDevice, part: Part) {
+        for (headerLba in listOf(1L, device.totalBlocks - 1)) {
+            val header = runCatching { device.readBlocks(headerLba, 1) }.getOrNull() ?: continue
+            if (!isGptSignature(header)) continue
+            val entryLba = le64(header, 72)
+            val count = le32(header, 80).toInt().coerceIn(0, 128)
+            val size = le32(header, 84).toInt().coerceAtLeast(128)
+            val sectors = (((count * size) + device.blockSize - 1) / device.blockSize).coerceAtLeast(1)
+            val table = runCatching { device.readBlocks(entryLba, sectors) }.getOrNull() ?: continue
+            val slot = (0 until count).firstOrNull { i ->
+                val base = i * size
+                base + size <= table.size &&
+                    le64(table, base + 32) == part.start &&
+                    le64(table, base + 40) == part.start + part.sectors - 1
+            } ?: continue
+            val base = slot * size
+            if ((0 until 16).all { table[base + it] == BASIC_DATA_GUID[it] }) continue
+            System.arraycopy(BASIC_DATA_GUID, 0, table, base, 16)
+            device.writeBlocks(entryLba, table)
+
+            // Both checksums cover exactly what the header declares.
+            val entryBytes = table.copyOfRange(0, count * size)
+            putLe32(header, 88, crc32(entryBytes))
+            putLe32(header, 16, 0)
+            val headerSize = le32(header, 12).toInt().coerceIn(92, device.blockSize)
+            putLe32(header, 16, crc32(header.copyOfRange(0, headerSize)))
+            device.writeBlocks(headerLba, header)
+        }
+    }
+
+    /** Reads the GPT entry back and reports whether it now says "Windows data". */
+    private fun gptEntryIsBasicData(device: BlockDevice, part: Part): Boolean {
+        val header = runCatching { device.readBlocks(1, 1) }.getOrNull() ?: return false
+        if (!isGptSignature(header)) return false
+        val entryLba = le64(header, 72)
+        val count = le32(header, 80).toInt().coerceIn(0, 128)
+        val size = le32(header, 84).toInt().coerceAtLeast(128)
+        val sectors = (((count * size) + device.blockSize - 1) / device.blockSize).coerceAtLeast(1)
+        val table = runCatching { device.readBlocks(entryLba, sectors) }.getOrNull() ?: return false
+        for (i in 0 until count) {
+            val base = i * size
+            if (base + size > table.size) break
+            if (le64(table, base + 32) != part.start) continue
+            if (le64(table, base + 40) != part.start + part.sectors - 1) continue
+            return (0 until 16).all { table[base + it] == BASIC_DATA_GUID[it] }
+        }
+        return false
+    }
+
+    private fun crc32(data: ByteArray): Long {
+        val crc = CRC32()
+        crc.update(data)
+        return crc.value
     }
 
     /**
