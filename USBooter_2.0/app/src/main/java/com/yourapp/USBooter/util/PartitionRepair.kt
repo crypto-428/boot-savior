@@ -1184,10 +1184,10 @@ object PartitionRepair {
 
             // Both checksums cover exactly what the header declares.
             val entryBytes = table.copyOfRange(0, count * size)
-            putLe32(header, 88, crc32(entryBytes))
-            putLe32(header, 16, 0)
+            put32(header, 88, crc32(entryBytes))
+            put32(header, 16, 0)
             val headerSize = le32(header, 12).toInt().coerceIn(92, device.blockSize)
-            putLe32(header, 16, crc32(header.copyOfRange(0, headerSize)))
+            put32(header, 16, crc32(header.copyOfRange(0, headerSize)))
             device.writeBlocks(headerLba, header)
         }
     }
