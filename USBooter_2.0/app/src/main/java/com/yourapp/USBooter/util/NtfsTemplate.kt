@@ -355,7 +355,14 @@ object NtfsTemplate {
         putLe32(attr, 16, name.size.toLong())                // content length
         System.arraycopy(attr, 0, rec, nameOff, newLen)
         System.arraycopy(tail, 0, rec, nameOff + newLen, tail.size)
-        for (i in (nameOff + newLen + tail.size) until rec.size) rec[i] = 0
+        // MFT records are stored with update-sequence stamps in the final two
+        // bytes of every sector. Clearing the rest of the 1 KiB record here used
+        // to erase those stamps (offsets 510 and 1022), so the preflight rejected
+        // every labelled template volume with E-FS-02 before formatting began.
+        // Only clear bytes made stale by a shorter attribute, and never leave the
+        // first sector's attribute area or touch either fixup stamp.
+        val staleEnd = minOf(used, 500)
+        for (i in newUsed until staleEnd) rec[i] = 0
         putLe32(rec, 24, newUsed.toLong())                    // the tail already ends with the record's end marker
     }
 
