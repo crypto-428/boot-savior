@@ -249,7 +249,7 @@
       n_format_complete: 'Format complete!',
       n_verification_failed: 'Error: verification failed',
       repair_title: 'Partition repair',
-      repair_scan: 'Check &amp; repair partitions (no data loss)',
+      repair_scan: 'Check & repair partitions (no data loss)',
       repair_apply: 'Repair without losing files',
       repair_risky: 'Repair anyway (files may be lost)',
       repair_app_only: 'Partition repair only works inside the USBooter app.',
