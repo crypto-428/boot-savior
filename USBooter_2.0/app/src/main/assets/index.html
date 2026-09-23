@@ -1211,6 +1211,10 @@
         <div id="prepSection">
         <div class="label" style="margin-bottom:6px;" id="prepHeading" data-i18n="preparation">Preparation</div>
         <div>
+          <label style="display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;font-size:12px;color:var(--text-muted);text-align:left;">
+            <input type="checkbox" id="deepFormat">
+            <span data-i18n="deep_format">🧹 Deep format (erase every sector — much slower, works with every filesystem)</span>
+          </label>
           <div class="label" style="margin-bottom:6px;" data-i18n="table_format">Table Format</div>
           <div class="toggle-group" id="tableToggle">
             <div class="toggle-opt active" onclick="switchTable(this, 'MBR')">MBR</div>
@@ -2052,6 +2056,7 @@
       deviceName: state.selectedDeviceName,
       driveModel: state.driveData.name,
       tableType: state.tableFormat,
+      deepFormat: !!(document.getElementById('deepFormat') || {}).checked,
       partitions: []
     };
 

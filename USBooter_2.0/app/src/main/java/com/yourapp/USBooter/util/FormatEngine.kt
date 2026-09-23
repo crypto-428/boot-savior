@@ -99,7 +99,7 @@ class FormatEngine(
                 percent(currentStep, totalSteps),
                 "Clearing the first few MB of the drive"
             )
-            wipeStart()
+            wipeStart(progressCallback)
             if (cancelled) return cancelled("Cancelled", progressCallback)
 
             // ── Step 2: Compute layout and write the partition table ────────
@@ -375,7 +375,7 @@ class FormatEngine(
         }
 
         progressCallback("Wiping the start of the drive...", 3, "Clearing stale partition tables")
-        wipeStart()
+        wipeStart(progressCallback)
         if (cancelled) return cancelled("Cancelled", progressCallback)
 
         progressCallback("Writing ${boot.isoDisplayName}...", 5, "Raw image clone - this replaces the whole drive")
@@ -564,7 +564,7 @@ class FormatEngine(
         )
 
         progressCallback("Preparing the drive...", 4, "Clearing old partition tables and boot records")
-        wipeStart()
+        wipeStart(progressCallback)
         if (cancelled) return cancelled("Cancelled", progressCallback)
 
         progressCallback("Writing MBR partition table...", 8, if (wantsData) "Boot partition + data partition" else "One FAT32 boot partition")
@@ -827,16 +827,33 @@ class FormatEngine(
         return false
     }
 
-    /** Zeroes the first few MB so no stale partition table or filesystem signature remains. */
-    private fun wipeStart() {
-        val sectorsToWipe = (10L * 1024 * 1024 / device.blockSize).coerceAtMost(device.totalBlocks)
+    /**
+     * Zeroes the first few MB so no stale partition table or filesystem signature remains.
+     * With deep format enabled, every sector of the drive is overwritten instead.
+     */
+    private fun wipeStart(progressCallback: (String, Int, String) -> Unit) {
+        val deep = config.deepFormat
+        val sectorsToWipe = if (deep) device.totalBlocks
+            else (10L * 1024 * 1024 / device.blockSize).coerceAtMost(device.totalBlocks)
+        val chunk = if (deep) (4L * 1024 * 1024 / device.blockSize).toInt().coerceAtLeast(1) else 512
         var lba = 0L
-        val chunk = 512 // sectors per write, keeps buffers small
+        var lastPct = -1
         while (lba < sectorsToWipe) {
             val count = minOf(chunk.toLong(), sectorsToWipe - lba).toInt()
             device.writeZeroBlocks(lba, count)
             lba += count
             if (cancelled) return
+            if (deep) {
+                val pct = (lba * 100 / sectorsToWipe).toInt()
+                if (pct != lastPct) {
+                    lastPct = pct
+                    val mb = 1024L * 1024
+                    progressCallback(
+                        "Deep format: erasing the whole drive ($pct%)", 2,
+                        "Erased ${lba * device.blockSize / mb} MB of ${sectorsToWipe * device.blockSize / mb} MB"
+                    )
+                }
+            }
         }
     }
 
