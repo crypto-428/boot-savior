@@ -87,7 +87,8 @@ object NtfsTemplate {
     fun format(
         device: BlockWriter,
         partitionStartLba: Long,
-        partitionSectorCount: Long
+        partitionSectorCount: Long,
+        volumeLabel: String = ""
     ) {
         val t = load()
         val bps = device.blockSize
