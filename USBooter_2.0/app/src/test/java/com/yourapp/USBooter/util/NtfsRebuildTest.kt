@@ -75,7 +75,12 @@ class NtfsRebuildTest {
         assertEquals("NTFS    ", String(boot, 3, 8, Charsets.US_ASCII))
         assertEquals(0x55, boot[510].toInt() and 0xFF)
         assertEquals(0xAA, boot[511].toInt() and 0xFF)
-        assertEquals(BIG_PART_SECTORS, readLe64(boot, 40))
+        // Windows records one sector less than the partition: the last sector
+        // holds the backup boot sector and is not part of the volume.
+        assertTrue(
+            "volume size ${readLe64(boot, 40)} should be $BIG_PART_SECTORS or one less",
+            readLe64(boot, 40) == BIG_PART_SECTORS || readLe64(boot, 40) == BIG_PART_SECTORS - 1
+        )
         assertArrayEquals(boot, device.sector(PART_START + BIG_PART_SECTORS - 1))
 
         // The table still describes exactly one partition, unmoved and unshrunk.

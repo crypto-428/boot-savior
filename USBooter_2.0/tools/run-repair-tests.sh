@@ -25,7 +25,7 @@ fetch https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
 
 for f in BlockDevice BlockWriter NtfsFormatter Mbr Gpt Fat32Formatter Fat32Writer \
          ExfatFormatter ExfatWriter PartitionConfig LayoutMath FormatError \
-         MbrBootCode NtfsCapability; do
+         MbrBootCode NtfsCapability NtfsTemplate; do
   cp "$MAIN/$f.kt" "$WORK/src/"
 done
 for f in DriveImages FakeBlockDevice NtfsRebuildTest PartitionRepairTest \
@@ -72,11 +72,13 @@ fun UsbBulkStorageDevice.writeZeroBlocks(lba: Long, count: Int) {}
 KT
 
 JARS="$LIBS/junit-4.13.2.jar:$LIBS/hamcrest-core-1.3.jar:$LIBS/json-20240303.jar"
+# The packed NTFS template is loaded as a classpath resource.
+RES="$ROOT/app/src/main/resources"
 kotlinc -nowarn -cp "$JARS" "$WORK"/src/*.kt -d "$WORK/out"
 STDLIB="$(dirname "$(readlink -f "$(command -v kotlinc)")")/../lib/kotlin-stdlib.jar"
 # The translation-coverage test locates assets/i18n.js relative to the CWD.
 cd "$ROOT/.."
-java -cp "$WORK/out:$JARS:$STDLIB" org.junit.runner.JUnitCore \
+java -cp "$WORK/out:$RES:$JARS:$STDLIB" org.junit.runner.JUnitCore \
   com.yourapp.USBooter.util.PartitionRepairTest \
   com.yourapp.USBooter.util.NtfsRebuildTest \
   com.yourapp.USBooter.util.RepairTranslationCoverageTest
