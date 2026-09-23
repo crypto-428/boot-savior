@@ -349,16 +349,14 @@ object NtfsTemplate {
 
         val tail = rec.copyOfRange(nameOff + nameLen, used)
         val attr = ByteArray(newLen)
-        System.arraycopy(rec, nameOff, attr, 0, minOf(nameLen, newLen).coerceAtMost(contentOff))
+        System.arraycopy(rec, nameOff, attr, 0, contentOff)   // attribute header
         System.arraycopy(name, 0, attr, contentOff, name.size)
         putLe32(attr, 4, newLen.toLong())                    // attribute length
         putLe32(attr, 16, name.size.toLong())                // content length
         System.arraycopy(attr, 0, rec, nameOff, newLen)
         System.arraycopy(tail, 0, rec, nameOff + newLen, tail.size)
         for (i in (nameOff + newLen + tail.size) until rec.size) rec[i] = 0
-        putLe32(rec, 24, newUsed.toLong())
-        putLe32(rec, nameOff + newLen + tail.size, 0xFFFFFFFFL)
-        putLe32(rec, nameOff + newLen + tail.size + 4, 0)
+        putLe32(rec, 24, newUsed.toLong())                    // the tail already ends with the record's end marker
     }
 
     private fun nonResidentRun(
