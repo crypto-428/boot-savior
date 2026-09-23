@@ -43,10 +43,159 @@ object NtfsCapability {
             val start = 2048L
             val mem = MemoryBlockWriter(blockSize, start + totalSectors)
             NtfsFormatter.format(mem, start, totalSectors, "USBOOTER")
-            validate(mem, start, totalSectors, blockSize)
+            // The formatter prefers the packed Windows-made volume; that volume is
+            // laid out the way Windows writes it (total sectors one less than the
+            // partition, sparse metadata, records 12..15 without a file name), so
+            // it needs its own validation instead of the hand-built expectations.
+            if (NtfsTemplate.supports(blockSize, totalSectors)) {
+                validateTemplate(mem, start, totalSectors, blockSize)
+            } else {
+                validate(mem, start, totalSectors, blockSize)
+            }
         } catch (e: Throwable) {
             Result(false, "exception", "${e.javaClass.simpleName}: ${e.message ?: "no message"}")
         }
+    }
+
+    // ── Validation of the packed Windows volume ─────────────────────────────
+
+    private fun validateTemplate(mem: MemoryBlockWriter, start: Long, totalSectors: Long, bps: Int): Result {
+        val boot = mem.read(start, 1) ?: return Result(false, "boot_missing", "no boot sector written at LBA $start")
+        val b = le(boot)
+        val oem = String(boot, 3, 8, StandardCharsets.US_ASCII)
+        if (oem != "NTFS    ") return Result(false, "boot_oem", "OEM id is '$oem', expected 'NTFS    '")
+        val bytesPerSector = b.getShort(0x0B).toInt() and 0xFFFF
+        if (bytesPerSector != bps) return Result(false, "boot_bps", "bytes/sector $bytesPerSector != $bps")
+        val spc = boot[0x0D].toInt() and 0xFF
+        if (spc == 0 || (spc and (spc - 1)) != 0) return Result(false, "boot_spc", "sectors/cluster $spc is not a power of two")
+        val clusterSize = spc * bytesPerSector
+        val totalField = b.getLong(0x28)
+        if (totalField != totalSectors - 1 && totalField != totalSectors) {
+            return Result(false, "boot_total", "total sectors field $totalField != ${totalSectors - 1}")
+        }
+        val totalClusters = totalSectors / spc
+        val mftLcn = b.getLong(0x30)
+        val mftMirrLcn = b.getLong(0x38)
+        if (mftLcn <= 0 || mftLcn >= totalClusters) return Result(false, "boot_mft_lcn", "\$MFT LCN $mftLcn out of range")
+        if (mftMirrLcn <= 0 || mftMirrLcn >= totalClusters) return Result(false, "boot_mirr_lcn", "\$MFTMirr LCN $mftMirrLcn out of range")
+        if (b.getLong(0x48) == 0L) return Result(false, "boot_serial", "volume serial number is zero")
+        if ((boot[510].toInt() and 0xFF) != 0x55 || (boot[511].toInt() and 0xFF) != 0xAA) {
+            return Result(false, "boot_signature", "missing 0x55AA boot signature")
+        }
+        val backup = mem.read(start + totalSectors - 1, 1)
+            ?: return Result(false, "boot_backup", "no backup boot sector at the last partition sector")
+        if (!backup.contentEquals(boot)) return Result(false, "boot_backup", "backup boot sector differs from the primary one")
+
+        val recSize = 1024
+        val mftBytes = mem.read(start + mftLcn * spc, 16 * recSize / bps)
+            ?: return Result(false, "mft_missing", "no \$MFT written at LCN $mftLcn")
+        for (i in 0 until 16) {
+            val rec = mftBytes.copyOfRange(i * recSize, (i + 1) * recSize)
+            val r = validateTemplateRecord(rec, i, bps)
+            if (r != null) return r
+        }
+
+        val mftAttrs = attributes(mftBytes.copyOfRange(0, recSize)).orEmpty()
+        val data = mftAttrs.firstOrNull { it.type == 0x80 }
+            ?: return Result(false, "mft_no_data", "\$MFT record has no \$DATA attribute")
+        if (data.resident) return Result(false, "mft_resident", "\$MFT \$DATA is resident; it must be non-resident")
+        val runs = decodeRunList(data.body, data.runListOffset)
+            ?: return Result(false, "mft_runlist", "\$MFT run list could not be decoded")
+        if (runs.isEmpty() || runs[0].second != mftLcn) {
+            return Result(false, "mft_runlist", "\$MFT run list starts at LCN ${runs.firstOrNull()?.second} but the boot sector says $mftLcn")
+        }
+
+        val volAttrs = attributes(mftBytes.copyOfRange(3 * recSize, 4 * recSize)).orEmpty().map { it.type }
+        if (0x60 !in volAttrs) return Result(false, "vol_name", "\$Volume record has no \$VOLUME_NAME")
+        if (0x70 !in volAttrs) return Result(false, "vol_info", "\$Volume record has no \$VOLUME_INFORMATION")
+        val rootAttrs = attributes(mftBytes.copyOfRange(5 * recSize, 6 * recSize)).orEmpty().map { it.type }
+        if (0x90 !in rootAttrs) return Result(false, "root_index", "root directory record has no \$INDEX_ROOT")
+
+        val mirror = mem.read(start + mftMirrLcn * spc, 4 * recSize / bps)
+            ?: return Result(false, "mirror_missing", "no \$MFTMirr data at LCN $mftMirrLcn")
+        if (!mirror.copyOfRange(0, 4 * recSize).contentEquals(mftBytes.copyOfRange(0, 4 * recSize))) {
+            return Result(false, "mirror_mismatch", "\$MFTMirr does not match the first four MFT records")
+        }
+
+        // \$Bitmap must exist and mark the boot area, the MFT zone and the mirror as used.
+        val bitmapAttr = attributes(mftBytes.copyOfRange(6 * recSize, 7 * recSize)).orEmpty()
+            .firstOrNull { it.type == 0x80 && !it.resident }
+            ?: return Result(false, "bitmap_attr", "\$Bitmap record has no non-resident \$DATA attribute")
+        val bitmapLcn = decodeRunList(bitmapAttr.body, bitmapAttr.runListOffset)?.firstOrNull()?.second
+            ?: return Result(false, "bitmap_runlist", "\$Bitmap run list could not be decoded")
+        val mirrorClusters = (4 * recSize + clusterSize - 1) / clusterSize
+        val highest = maxOf(mftLcn + 15, mftMirrLcn + mirrorClusters - 1)
+        val neededBytes = highest / 8 + 1
+        val bitmapSectors = ((neededBytes + bps - 1) / bps).toInt().coerceAtLeast(1)
+        val bitmap = mem.read(start + bitmapLcn * spc, bitmapSectors)
+            ?: return Result(false, "bitmap_missing", "no \$Bitmap data at LCN $bitmapLcn")
+        fun used(cluster: Long): Boolean =
+            ((bitmap[(cluster / 8).toInt()].toInt() shr (cluster % 8).toInt()) and 1) == 1
+        if (!used(0L)) return Result(false, "bitmap_unset", "the boot cluster is marked free in \$Bitmap")
+        for (cluster in mftLcn until mftLcn + 16) {
+            if (!used(cluster)) return Result(false, "bitmap_unset", "\$MFT cluster $cluster is marked free in \$Bitmap")
+        }
+        for (cluster in mftMirrLcn until mftMirrLcn + mirrorClusters) {
+            if (!used(cluster)) return Result(false, "bitmap_mirror_unset", "\$MFTMirr cluster $cluster is marked free in \$Bitmap")
+        }
+
+        val upcaseAttr = attributes(mftBytes.copyOfRange(10 * recSize, 11 * recSize)).orEmpty()
+            .firstOrNull { it.type == 0x80 && !it.resident }
+            ?: return Result(false, "upcase_attr", "\$UpCase record has no non-resident \$DATA attribute")
+        if (upcaseAttr.realSize != 128L * 1024) {
+            return Result(false, "upcase_size", "\$UpCase is ${upcaseAttr.realSize} bytes, expected 131072")
+        }
+
+        val outside = mem.writtenOutside(start, totalSectors)
+        if (outside != null) {
+            return Result(false, "out_of_bounds", "the formatter wrote to LBA $outside, outside the partition ($start..${start + totalSectors - 1})")
+        }
+
+        return Result(
+            true, null,
+            "NTFS 3.1 self-test passed on the packed Windows volume: boot sector, backup sector, " +
+                "16 MFT records, mirror, \$Bitmap and \$UpCase verified (cluster size $clusterSize B)"
+        )
+    }
+
+    private fun validateTemplateRecord(rec: ByteArray, index: Int, bps: Int): Result? {
+        val b = le(rec)
+        val sig = String(rec, 0, 4, StandardCharsets.US_ASCII)
+        if (sig != "FILE") return Result(false, "mft_signature", "MFT record $index signature is '$sig', expected 'FILE'")
+        val usaOffset = b.getShort(0x04).toInt() and 0xFFFF
+        val usaCount = b.getShort(0x06).toInt() and 0xFFFF
+        val sectors = rec.size / bps
+        if (usaOffset != 0x30) return Result(false, "mft_usa_offset", "record $index update-sequence offset is 0x%02X, expected 0x30 (NTFS 3.1)".format(usaOffset))
+        if (usaCount != sectors + 1) return Result(false, "mft_usa_count", "record $index update-sequence count is $usaCount, expected ${sectors + 1}")
+        val firstAttr = b.getShort(0x14).toInt() and 0xFFFF
+        if (firstAttr < usaOffset + usaCount * 2) return Result(false, "mft_attr_offset", "record $index first attribute offset 0x%02X overlaps the fixup array".format(firstAttr))
+        if ((b.getShort(0x16).toInt() and 0x0001) == 0) return Result(false, "mft_in_use", "record $index is not flagged in-use")
+        val used = b.getInt(0x18)
+        val alloc = b.getInt(0x1C)
+        if (alloc != rec.size) return Result(false, "mft_alloc", "record $index allocated size $alloc != ${rec.size}")
+        if (used <= firstAttr || used > rec.size) return Result(false, "mft_used", "record $index used size $used is out of range")
+        if (b.getInt(0x2C) != index) return Result(false, "mft_number", "record $index stores record number ${b.getInt(0x2C)}")
+
+        val usnLo = rec[usaOffset]
+        val usnHi = rec[usaOffset + 1]
+        if (usnLo == 0.toByte() && usnHi == 0.toByte()) {
+            return Result(false, "mft_usn", "record $index has a zero update sequence number")
+        }
+        for (s in 0 until sectors) {
+            val end = (s + 1) * bps - 2
+            if (rec[end] != usnLo || rec[end + 1] != usnHi) {
+                return Result(false, "mft_fixup", "record $index sector $s is not stamped with the update sequence number")
+            }
+        }
+
+        val attrs = attributes(rec) ?: return Result(false, "mft_attrs", "record $index has a malformed attribute chain")
+        if (attrs.isEmpty()) return Result(false, "mft_attrs", "record $index has no attributes")
+        if (attrs.none { it.type == 0x10 }) return Result(false, "mft_std_info", "record $index has no \$STANDARD_INFORMATION")
+        // Records 12..15 ($Quota-era reserved entries) legitimately carry no \$FILE_NAME.
+        if (index < 12 && attrs.none { it.type == 0x30 }) {
+            return Result(false, "mft_file_name", "record $index has no \$FILE_NAME")
+        }
+        return null
     }
 
     // ── Validation ──────────────────────────────────────────────────────────
