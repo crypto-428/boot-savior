@@ -27,17 +27,20 @@ object NtfsResize {
     fun minimumSectors(device: BlockDevice, start: Long, boot: ByteArray): Long? = runCatching {
         val g = geometry(boot, device.blockSize) ?: return null
         val bits = readBitmap(device, start, g).second
+        // Bits past the current cluster count are padding (always set), so ignore them.
+        val current = minOf(le64(boot, 40) / g.spc, bits.size * 8L)
         var last = -1L
-        for (i in bits.indices.reversed()) {
-            val v = bits[i].toInt() and 0xFF
-            if (v != 0) { last = i * 8L + (7 - Integer.numberOfLeadingZeros(v shl 24)); break }
+        var c = current - 1
+        while (c >= 0) {
+            if ((bits[(c / 8).toInt()].toInt() shr (c % 8).toInt()) and 1 != 0) { last = c; break }
+            c--
         }
-        val clusters = maxOf(last + 1, 1L); System.err.println("NTFSMIN last=$last bytes=${bits.size} spc=${g.spc}")
+        val clusters = maxOf(last + 1, 1L)
         // +1 sector for the backup boot sector, then round up to 1 MiB.
         val sectors = clusters * g.spc * g.scale + 1
         val mib = 1_048_576L / device.blockSize
         ((sectors + mib - 1) / mib) * mib
-    }.onFailure { System.err.println("NTFSMIN " + it) }.getOrNull()
+    }.getOrNull()
 
     /** Resizes the filesystem to fit [newSectors] device sectors. Returns an error message or null. */
     fun resize(device: BlockDevice, start: Long, oldSectors: Long, newSectors: Long, boot: ByteArray): String? {
@@ -62,9 +65,12 @@ object NtfsResize {
         if ((hdr shr 4) != 0 || lenBytes == 0) return "The NTFS \$BadClus list is not empty; resize refused"
         if (clusters >= (1L shl (8 * lenBytes - 1))) return "The NTFS \$BadClus list cannot describe the new size"
 
-        // 1. clear bitmap bits past the new end and write the bitmap data back
-        for (c in clusters until bits.size * 8L) {
-            val i = (c / 8).toInt(); bits[i] = (bits[i].toInt() and (1 shl (c % 8).toInt()).inv()).toByte()
+        // 1. new area free, padding past the new end set (NTFS convention), rest zero
+        val oldClusters = le64(boot, 40) / g.spc
+        for (c in minOf(oldClusters, clusters) until bits.size * 8L) {
+            val i = (c / 8).toInt(); val m = 1 shl (c % 8).toInt()
+            val set = c >= clusters && c < bitmapBytes * 8
+            bits[i] = (if (set) bits[i].toInt() or m else bits[i].toInt() and m.inv()).toByte()
         }
         writeBitmap(device, start, g, bitmapRec.second, bmAttr, bits)
         // 2. $Bitmap sizes
