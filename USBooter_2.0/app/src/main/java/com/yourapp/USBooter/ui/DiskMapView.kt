@@ -51,7 +51,7 @@ object DiskMapView {
                 )
                 setBackgroundColor(
                     if (partition.isESP)
-                        themeColor(context, com.google.android.material.R.attr.colorPrimary)
+                        themeColor(context, android.R.attr.colorPrimary)
                     else
                         themeColor(context, com.google.android.material.R.attr.colorSurfaceVariant)
                 )
