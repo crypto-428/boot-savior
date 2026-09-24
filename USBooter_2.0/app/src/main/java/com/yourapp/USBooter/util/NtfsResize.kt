@@ -37,7 +37,7 @@ object NtfsResize {
         val sectors = clusters * g.spc * g.scale + 1
         val mib = 1_048_576L / device.blockSize
         ((sectors + mib - 1) / mib) * mib
-    }.getOrNull()
+    }.onFailure { System.err.println("NTFSMIN " + it) }.getOrNull()
 
     /** Resizes the filesystem to fit [newSectors] device sectors. Returns an error message or null. */
     fun resize(device: BlockDevice, start: Long, oldSectors: Long, newSectors: Long, boot: ByteArray): String? {
