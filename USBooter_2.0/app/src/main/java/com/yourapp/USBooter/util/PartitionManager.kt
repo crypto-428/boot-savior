@@ -180,7 +180,12 @@ object PartitionManager {
             val fs = boot?.let { filesystemOf(it) }
             val fsSectors = boot?.let { declaredSectors(it, fs, device.blockSize) } ?: 0L
             val nextStart = list.getOrNull(position + 1)?.start ?: limit
-            val minSectors = if (fs != null && fsSectors > 0) minOf(fsSectors, e.sectors) else e.sectors
+            val ntfsMin = if (fs == "NTFS" && boot != null) NtfsResize.minimumSectors(device, e.start, boot) else null
+            val minSectors = when {
+                ntfsMin != null -> minOf(ntfsMin, e.sectors)
+                fs != null && fsSectors > 0 -> minOf(fsSectors, e.sectors)
+                else -> e.sectors
+            }
             val maxSectors = maxOf(e.sectors, nextStart - e.start)
             array.put(
                 JSONObject().apply {
@@ -280,7 +285,14 @@ object PartitionManager {
         val boot = runCatching { device.readBlocks(target.start, 1) }.getOrNull()
         val fs = boot?.let { filesystemOf(it) }
         val fsSectors = if (boot != null) declaredSectors(boot, fs, device.blockSize) else 0L
-        if (newSectors < fsSectors && !allowDataLoss) {
+        val ntfsMin = if (fs == "NTFS" && boot != null) NtfsResize.minimumSectors(device, target.start, boot) else null
+        if (fs == "NTFS" && ntfsMin != null && newSectors < ntfsMin) {
+            return failure(
+                "Partition $index has files up to $ntfsMin sectors, so it cannot be shrunk to $newSectors sectors " +
+                    "without cutting them off. Choose a larger size."
+            )
+        }
+        if (fs != "NTFS" && newSectors < fsSectors && !allowDataLoss) {
             return failure(
                 "Partition $index holds a ${fs ?: "unknown"} filesystem that needs $fsSectors sectors. Shrinking it to " +
                     "$newSectors sectors would cut off files at the end of the volume, so it was not done. " +
@@ -295,6 +307,12 @@ object PartitionManager {
         }
 
         val notes = mutableListOf<String>()
+        // Shrinking NTFS: fit the filesystem first, so a failure leaves the partition untouched.
+        var ntfsDone = false
+        if (fs == "NTFS" && boot != null && newSectors < target.sectors) {
+            NtfsResize.resize(device, target.start, target.sectors, newSectors, boot)?.let { return failure(it) }
+            ntfsDone = true
+        }
         // The table entry first: the filesystem is only touched after the geometry is real.
         if (g != null) {
             put64(g.entries, (index - 1) * g.entrySize + 40, target.start + newSectors - 1)
@@ -307,14 +325,9 @@ object PartitionManager {
         }
 
         if (fs == "NTFS" && boot != null) {
-            val fixed = boot.copyOf()
-            put64(fixed, 40, newSectors - 1)
-            device.writeBlocks(target.start + newSectors - 1, fixed)
-            device.writeBlocks(target.start, fixed)
-            if (target.sectors != newSectors) {
-                val oldCopy = target.start + target.sectors - 1
-                if (oldCopy != target.start + newSectors - 1 && oldCopy < device.totalBlocks) {
-                    runCatching { device.writeBlocks(oldCopy, ByteArray(device.blockSize)) }
+            if (!ntfsDone) {
+                NtfsResize.resize(device, target.start, target.sectors, newSectors, boot)?.let {
+                    notes += it
                 }
             }
             notes += "The NTFS volume and its boot-sector copy were resized with the partition"

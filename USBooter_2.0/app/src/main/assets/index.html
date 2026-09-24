@@ -2577,6 +2577,13 @@
         '<div style="font-size:11px;opacity:.8;margin-top:2px;">' + peMB(p.sizeSectors) + ' MB \u00b7 ' +
           t('pe_starts_at') + ' ' + p.startLba + '</div>' +
         '<div style="font-size:11px;opacity:.7;margin-top:4px;">' + escapeHtml(I18N.tNative(p.note || '')) + '</div>' +
+        (p.canResize ? '<div style="display:flex;gap:8px;margin-top:8px;align-items:center;">' +
+          '<input id="peInline' + p.index + '" type="number" inputmode="numeric" value="' + peMB(p.sizeSectors) + '" min="' +
+            Math.max(1, peMB(p.minSizeSectors)) + '" max="' + peMB(p.maxSizeSectors) +
+            '" style="flex:1;min-width:0;padding:8px;border-radius:8px;border:1px solid var(--btn-ghost-border);background:var(--card-bg);color:var(--text);">' +
+          '<span style="font-size:11px;opacity:.8">MB</span>' +
+          '<button class="btn primary" style="flex:0 0 auto;padding:8px 12px;" onclick="peInlineResize(' + p.index + ')">' + t('pe_apply') + '</button></div>' +
+          '<div style="font-size:10px;opacity:.7;margin-top:4px;">' + Math.max(1, peMB(p.minSizeSectors)) + ' \u2013 ' + peMB(p.maxSizeSectors) + ' MB</div>' : '') +
         '<div style="display:flex;gap:8px;margin-top:8px;">' +
           (p.canResize ? '<button class="btn" style="flex:1;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" onclick="askResizePartition(' + p.index + ')">' + t('pe_resize') + '</button>' : '') +
           (p.canDelete ? '<button class="btn danger" style="flex:1" onclick="askDeletePartition(' + p.index + ')">' + t('pe_delete') + '</button>' : '') +
@@ -2675,6 +2682,12 @@
     document.getElementById('modalBtnRow').innerHTML =
       '<button class="btn ghost" onclick="closeModal(); peRenderMap();">' + t('repair_cancel') + '</button>' +
       '<button class="btn primary" onclick="doResizePartition(' + index + ')">' + t('pe_apply') + '</button>';
+  }
+
+  function peInlineResize(index) {
+    const mb = Number((document.getElementById('peInline' + index) || {}).value || 0);
+    if (!(mb > 0)) { showToast(t('pe_bad_size')); return; }
+    askResizePartition(index, Math.round(mb));
   }
 
   function doResizePartition(index) {
