@@ -840,8 +840,19 @@ class FormatEngine(
         var lastPct = -1
         while (lba < sectorsToWipe) {
             val count = minOf(chunk.toLong(), sectorsToWipe - lba).toInt()
-            device.writeZeroBlocks(lba, count)
+            try {
+                device.writeZeroBlocks(lba, count)
+            } catch (e: java.io.IOException) {
+                if (!deep) throw e
+                // Give an overheated/busy stick time to recover, then retry once.
+                Thread.sleep(3000)
+                device.writeZeroBlocks(lba, count)
+            }
             lba += count
+            // Let cheap sticks drain their write cache regularly during a deep wipe.
+            if (deep && lba % (256L * 1024 * 1024 / device.blockSize) < count) {
+                runCatching { device.synchronizeCache() }
+            }
             if (cancelled) return
             if (deep) {
                 val pct = (lba * 100 / sectorsToWipe).toInt()
