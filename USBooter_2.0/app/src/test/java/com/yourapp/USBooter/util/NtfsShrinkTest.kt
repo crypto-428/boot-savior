@@ -21,6 +21,9 @@ class NtfsShrinkTest {
         val vol = (0 until 8).fold(0L) { a, i -> a or ((boot[40 + i].toLong() and 0xFF) shl (8 * i)) }
         assertEquals(99_999L, vol)
         assertTrue(d.readBlocks(2048 + 99_999, 1).contentEquals(boot))
+        System.getenv("NTFS_DUMP")?.let { path ->
+            java.io.File(path).outputStream().use { o -> for (l in 2048L until 2048 + 100_000) o.write(d.readBlocks(l, 1)) }
+        }
         r = PartitionManager.resizeDevice(d, 1, min - 2048, false)
         assertTrue(!r.getBoolean("ok"))
         r = PartitionManager.resizeDevice(d, 1, 150_000, false)
