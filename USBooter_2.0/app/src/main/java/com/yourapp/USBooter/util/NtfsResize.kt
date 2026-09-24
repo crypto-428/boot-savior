@@ -35,7 +35,7 @@ object NtfsResize {
             if ((bits[(c / 8).toInt()].toInt() shr (c % 8).toInt()) and 1 != 0) { last = c; break }
             c--
         }
-        val clusters = maxOf(last + 1, 1L)
+        val clusters = maxOf(last + 1, 1L); System.err.println("DBG last=$last current=$current")
         // +1 sector for the backup boot sector, then round up to 1 MiB.
         val sectors = clusters * g.spc * g.scale + 1
         val mib = 1_048_576L / device.blockSize
