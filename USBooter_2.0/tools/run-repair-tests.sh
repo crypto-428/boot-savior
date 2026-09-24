@@ -91,4 +91,5 @@ cd "$ROOT/.."
 java -cp "$WORK/out:$RES:$JARS:$STDLIB" org.junit.runner.JUnitCore \
   com.yourapp.USBooter.util.PartitionRepairTest \
   com.yourapp.USBooter.util.NtfsRebuildTest \
-  com.yourapp.USBooter.util.RepairTranslationCoverageTest
+  com.yourapp.USBooter.util.RepairTranslationCoverageTest \
+  com.yourapp.USBooter.util.PartitionManagerGptTest
