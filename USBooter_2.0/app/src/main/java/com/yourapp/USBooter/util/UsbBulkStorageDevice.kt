@@ -32,7 +32,7 @@ class UsbBulkStorageDevice private constructor(
     override var totalBlocks: Long = 0
         private set
 
-    private val timeoutMs = 5000
+    private val timeoutMs = 20000
     private val usbLock = Any()
 
     companion object {
@@ -313,7 +313,8 @@ class UsbBulkStorageDevice private constructor(
         dataLength: Int,
         direction: Int
     ): Int = synchronized(usbLock) {
-        var retries = 2
+        var retries = 4
+        var attempt = 0
         var senseRetried = false
         while (retries >= 0) {
             try {
@@ -330,9 +331,15 @@ class UsbBulkStorageDevice private constructor(
             } catch (e: IOException) {
                 if (retries == 0) throw e
                 retries--
-                clearHalt(inEndpoint)
-                clearHalt(outEndpoint)
-                Thread.sleep(100)
+                attempt++
+                // A drive busy flushing its internal cache (typical after long
+                // sequential writes such as a deep format) stops accepting
+                // commands for a while. Do a full Bulk-Only reset and back off.
+                Thread.sleep(500L * attempt)
+                runCatching { bulkOnlyReset() }
+                runCatching { clearHalt(inEndpoint) }
+                runCatching { clearHalt(outEndpoint) }
+                Thread.sleep(250L * attempt)
             }
         }
         throw IOException("Failed after retries")
@@ -387,6 +394,11 @@ class UsbBulkStorageDevice private constructor(
             throw IOException("Incomplete SCSI transfer: device reports $residue unwritten/unread bytes")
         }
         return status
+    }
+
+    /** USB Mass Storage class request: Bulk-Only Mass Storage Reset. */
+    private fun bulkOnlyReset() {
+        connection.controlTransfer(0x21, 0xFF, 0, usbInterface.id, null, 0, timeoutMs)
     }
 
     private fun clearHalt(endpoint: UsbEndpoint) {
