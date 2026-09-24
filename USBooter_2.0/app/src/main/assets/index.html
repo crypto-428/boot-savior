@@ -592,6 +592,10 @@
     position:relative;
   }
   .seg:last-child{border-right:none;}
+  .seg.free{background:transparent;color:var(--text-muted);min-width:0;}
+  .pe-handle{position:absolute;top:-4px;bottom:-4px;width:22px;margin-left:-11px;cursor:ew-resize;z-index:3;display:flex;align-items:center;justify-content:center;touch-action:none;}
+  .pe-handle::before{content:"";width:6px;height:70%;border-radius:3px;background:var(--accent);box-shadow:0 0 0 2px var(--card-bg);}
+  .pe-handle.drag::before{width:8px;}
   .seg.esp{
     background:var(--seg-esp);
     color:var(--text);
@@ -1434,6 +1438,11 @@
             Make a partition smaller or bigger, remove one, or use free space for a new one. Files are never moved, so anything that would need moving files is refused with the reason.
           </div>
           <div id="peSummary" style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:left;"></div>
+          <div class="diskmap" id="peMapBox" style="display:none;margin-top:8px;">
+            <div class="ruler"><span>0</span><span id="peMapMid"></span><span id="peMapTotal"></span></div>
+            <div class="segbar" id="peMap" style="touch-action:none;"></div>
+            <div id="peMapHint" style="font-size:10px;color:var(--text-muted);margin-top:6px;text-align:left;" data-i18n="pe_drag_hint">Drag the handle at the end of a partition to change its size.</div>
+          </div>
           <div id="peList" style="margin-top:8px;text-align:left;"></div>
           <div id="peFree" style="display:none;margin-top:8px;text-align:left;font-size:12px;color:var(--text-muted);"></div>
           <button class="btn" id="peLoadBtn" onclick="loadPartitionEditor()" style="width:100%;margin-top:10px;border:1px solid var(--btn-ghost-border);background:transparent;color:var(--btn-ghost-text);" data-i18n="pe_load">Show current partitions</button>
@@ -2574,6 +2583,7 @@
         '</div></div>';
     }).join('');
 
+    peRenderMap();
     const free = Number(peState.freeSectors || 0);
     const freeBox = document.getElementById('peFree');
     freeBox.style.display = free > 0 ? 'block' : 'none';
@@ -2582,13 +2592,73 @@
       (peState.editable && free > peSectors(16)) ? 'block' : 'none';
   }
 
+
+  // ---- to-scale bar with draggable partition ends
+  var peDrag = null;
+  function peTotal() { return Number((peState && (peState.usableEnd || peState.totalSectors)) || 0); }
+  function peRenderMap(override) {
+    const box = document.getElementById('peMapBox');
+    const total = peTotal();
+    const parts = ((peState && peState.partitions) || []).slice().sort(function (a, b) { return a.startLba - b.startLba; });
+    if (!total || !peState.ok) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    const gb = function (sec) { return (Number(sec) * ((peState.blockSize) || 512) / 1073741824).toFixed(1) + ' GB'; };
+    document.getElementById('peMapMid').textContent = gb(total / 2);
+    document.getElementById('peMapTotal').textContent = gb(total);
+    var html = '', pos = 0, handles = '';
+    parts.forEach(function (p, i) {
+      const size = (override && override.index === p.index) ? override.sectors : Number(p.sizeSectors);
+      const start = Number(p.startLba);
+      if (start > pos) html += '<div class="seg free" style="flex:0 0 ' + ((start - pos) / total * 100) + '%"></div>';
+      const pct = size / total * 100;
+      html += '<div class="seg ' + (i % 2 ? 'data' : 'esp') + '" style="flex:0 0 ' + pct + '%;min-width:0;overflow:hidden">' +
+        '<span class="seg-label">' + escapeHtml(p.filesystem || '?') + '</span>' +
+        '<span class="seg-size">' + peMB(size) + ' MB</span></div>';
+      pos = start + size;
+      if (p.canResize) handles += '<div class="pe-handle" data-idx="' + p.index + '" style="left:' + ((start + size) / total * 100) + '%"></div>';
+    });
+    if (pos < total) html += '<div class="seg free" style="flex:1"></div>';
+    const bar = document.getElementById('peMap');
+    bar.innerHTML = html + handles;
+    bar.querySelectorAll('.pe-handle').forEach(function (h) { h.addEventListener('pointerdown', peDragStart); });
+  }
+  function peDragStart(ev) {
+    ev.preventDefault();
+    const p = peFind(Number(ev.currentTarget.dataset.idx));
+    if (!p) return;
+    peDrag = { p: p, sectors: Number(p.sizeSectors) };
+    ev.currentTarget.classList.add('drag');
+    window.addEventListener('pointermove', peDragMove);
+    window.addEventListener('pointerup', peDragEnd, { once: true });
+  }
+  function peDragMove(ev) {
+    if (!peDrag) return;
+    const rect = document.getElementById('peMap').getBoundingClientRect();
+    const total = peTotal();
+    const at = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)) * total;
+    const p = peDrag.p;
+    const align = peSectors(1);
+    var size = Math.round((at - Number(p.startLba)) / align) * align;
+    size = Math.max(Number(p.minSizeSectors) || align, Math.min(Number(p.maxSizeSectors), size));
+    peDrag.sectors = size;
+    peRenderMap({ index: p.index, sectors: size });
+    const h = document.querySelector('#peMap .pe-handle[data-idx="' + p.index + '"]');
+    if (h) { h.classList.add('drag'); h.addEventListener('pointerdown', peDragStart); }
+  }
+  function peDragEnd() {
+    window.removeEventListener('pointermove', peDragMove);
+    const d = peDrag; peDrag = null;
+    if (!d || d.sectors === Number(d.p.sizeSectors)) { peRenderMap(); return; }
+    askResizePartition(d.p.index, peMB(d.sectors));
+  }
+
   function peFind(index) {
     const parts = (peState && peState.partitions) || [];
     for (var i = 0; i < parts.length; i++) if (parts[i].index === index) return parts[i];
     return null;
   }
 
-  function askResizePartition(index) {
+  function askResizePartition(index, presetMB) {
     const p = peFind(index);
     if (!p) return;
     const minMB = Math.max(1, peMB(p.minSizeSectors));
@@ -2597,13 +2667,13 @@
       t('pe_resize_body') + ' ' + minMB + ' \u2013 ' + maxMB + ' MB.');
     document.getElementById('modalMessage').insertAdjacentHTML('beforeend',
       '<div style="margin-top:10px;text-align:left">' +
-        '<input id="peSizeMB" type="number" value="' + peMB(p.sizeSectors) + '" min="' + minMB +
+        '<input id="peSizeMB" type="number" value="' + (presetMB || peMB(p.sizeSectors)) + '" min="' + minMB +
           '" max="' + maxMB + '" style="width:100%;padding:8px;">' +
         '<label style="display:flex;gap:8px;margin-top:8px;font-size:11px;opacity:.8;">' +
           '<input type="checkbox" id="peAllowLoss"><span>' + t('pe_allow_loss') + '</span></label>' +
       '</div>');
     document.getElementById('modalBtnRow').innerHTML =
-      '<button class="btn ghost" onclick="closeModal()">' + t('repair_cancel') + '</button>' +
+      '<button class="btn ghost" onclick="closeModal(); peRenderMap();">' + t('repair_cancel') + '</button>' +
       '<button class="btn primary" onclick="doResizePartition(' + index + ')">' + t('pe_apply') + '</button>';
   }
 

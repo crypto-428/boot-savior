@@ -29,7 +29,7 @@ for f in BlockDevice BlockWriter NtfsFormatter Mbr Gpt Fat32Formatter Fat32Write
   cp "$MAIN/$f.kt" "$WORK/src/"
 done
 for f in DriveImages FakeBlockDevice NtfsRebuildTest PartitionRepairTest \
-         RepairTranslationCoverageTest; do
+         RepairTranslationCoverageTest PartitionManagerGptTest; do
   cp "$TEST/$f.kt" "$WORK/src/"
 done
 
@@ -53,6 +53,16 @@ for line in lines:
         continue
     out.append(line)
 open(dst, 'w').write('\n'.join(out))
+PY
+
+# PartitionManager without its Context-based wrappers.
+python3 - "$MAIN/PartitionManager.kt" "$WORK/src/PartitionManager.kt" <<'PY'
+import re, sys
+s = open(sys.argv[1]).read()
+a = s.index('    fun list(context'); b = s.index('    /** Moving a partition')
+s = s[:a] + s[b:]
+s = s.replace('import android.content.Context\n', '')
+open(sys.argv[2], 'w').write(s)
 PY
 
 cat > "$WORK/src/UsbStub.kt" <<'KT'

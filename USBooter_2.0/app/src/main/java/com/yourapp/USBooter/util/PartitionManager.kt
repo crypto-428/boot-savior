@@ -10,8 +10,8 @@ import org.json.JSONObject
  *
  * The rules that keep this honest:
  *
- *  - Only the MBR primary table is edited. A GPT drive is reported as read-only
- *    here rather than half-supported.
+ *  - MBR primary tables and GPT tables are both edited; GPT changes are written
+ *    to the primary and backup copies with fresh CRCs.
  *  - A partition is never shrunk below the size its own filesystem declares, and
  *    never grown over its neighbour or past the last sector of the drive, unless
  *    the caller explicitly accepts data loss.
@@ -72,9 +72,80 @@ object PartitionManager {
         val active: Boolean
     )
 
+    /** A parsed GPT: primary header, its entry array, and the usable LBA window. */
+    class GptTable(
+        val header: ByteArray,
+        val entriesLba: Long,
+        val count: Int,
+        val entrySize: Int,
+        val entries: ByteArray,
+        val backupLba: Long,
+        val firstUsable: Long,
+        val lastUsable: Long
+    )
+
+    private val BASIC_DATA_GUID = byteArrayOf(
+        0xA2.toByte(), 0xA0.toByte(), 0xD0.toByte(), 0xEB.toByte(), 0xE5.toByte(), 0xB9.toByte(), 0x33, 0x44,
+        0x87.toByte(), 0xC0.toByte(), 0x68, 0xB6.toByte(), 0xB7.toByte(), 0x26, 0x99.toByte(), 0xC7.toByte()
+    )
+    private val ESP_GUID = byteArrayOf(
+        0x28, 0x73, 0x2A, 0xC1.toByte(), 0x1F, 0xF8.toByte(), 0xD2.toByte(), 0x11,
+        0xBA.toByte(), 0x4B, 0x00, 0xA0.toByte(), 0xC9.toByte(), 0x3E, 0xC9.toByte(), 0x3B
+    )
+
+    fun readGpt(device: BlockDevice): GptTable? = runCatching {
+        val h = device.readBlocks(1, 1)
+        if (String(h, 0, 8, Charsets.US_ASCII) != "EFI PART") return null
+        val entriesLba = le64(h, 72)
+        val count = le32(h, 80).toInt()
+        val size = le32(h, 84).toInt()
+        if (count !in 1..1024 || size !in 128..1024 || entriesLba < 2) return null
+        val bytes = count * size
+        val blocks = (bytes + device.blockSize - 1) / device.blockSize
+        val e = device.readBlocks(entriesLba, blocks)
+        GptTable(h, entriesLba, count, size, e, le64(h, 32), le64(h, 40), le64(h, 48))
+    }.getOrNull()
+
+    private fun gptEntries(g: GptTable): List<Entry?> = (0 until g.count).map { i ->
+        val o = i * g.entrySize
+        val empty = (0 until 16).all { g.entries[o + it].toInt() == 0 }
+        val first = le64(g.entries, o + 32)
+        val last = le64(g.entries, o + 40)
+        if (empty || first <= 0 || last < first) null
+        else {
+            val esp = (0 until 16).all { g.entries[o + it] == ESP_GUID[it] }
+            Entry(i + 1, first, last - first + 1, if (esp) 0xEF else 0x07, false)
+        }
+    }
+
+    private fun crc(b: ByteArray, off: Int, len: Int): Long =
+        java.util.zip.CRC32().apply { update(b, off, len) }.value
+
+    /** Writes the (modified) entry array to both GPT copies and re-stamps both header CRCs. */
+    fun writeGpt(device: BlockDevice, g: GptTable) {
+        val bytes = g.count * g.entrySize
+        val entriesCrc = crc(g.entries, 0, bytes)
+        fun stamp(h: ByteArray) {
+            put32(h, 88, entriesCrc)
+            val hs = le32(h, 12).toInt().coerceIn(92, h.size)
+            put32(h, 16, 0)
+            put32(h, 16, crc(h, 0, hs))
+        }
+        val backup = runCatching { device.readBlocks(g.backupLba, 1) }.getOrNull()
+        if (backup != null && String(backup, 0, 8, Charsets.US_ASCII) == "EFI PART") {
+            device.writeBlocks(le64(backup, 72), g.entries)
+            stamp(backup)
+            device.writeBlocks(g.backupLba, backup)
+        }
+        device.writeBlocks(g.entriesLba, g.entries)
+        stamp(g.header)
+        device.writeBlocks(1, g.header)
+    }
+
     /** Reads the four MBR primary entries in slot order, blanks included as null. */
     fun entries(device: BlockDevice): List<Entry?> {
         val s = device.readBlocks(0, 1)
+        if (isProtective(s)) readGpt(device)?.let { return gptEntries(it) }
         if (!hasSignature(s)) return List(4) { null }
         return (0 until 4).map { i ->
             val o = 446 + i * 16
@@ -86,19 +157,31 @@ object PartitionManager {
         }
     }
 
+    private fun isProtective(s: ByteArray) =
+        (0 until 4).any { (s[446 + it * 16 + 4].toInt() and 0xFF) == 0xEE }
+
+    /** Last sector (exclusive) partitions may use. */
+    private fun endLimit(device: BlockDevice, g: GptTable?) =
+        if (g != null) minOf(g.lastUsable + 1, device.totalBlocks) else device.totalBlocks
+
     fun listDevice(device: BlockDevice): JSONObject {
         val s = runCatching { device.readBlocks(0, 1) }.getOrNull()
             ?: return failure("The first sector of the drive could not be read")
-        val gpt = (s[446 + 4].toInt() and 0xFF) == 0xEE
+        val g = if (isProtective(s)) readGpt(device) else null
+        if (isProtective(s) && g == null) {
+            return failure("This drive says it uses GPT, but its GPT header could not be read. Use Repair first.")
+        }
+        val limit = endLimit(device, g)
+        val minStart = maxOf(alignment(device), g?.firstUsable ?: 0L)
         val list = entries(device).filterNotNull().sortedBy { it.start }
         val array = JSONArray()
         list.forEachIndexed { position, e ->
             val boot = runCatching { device.readBlocks(e.start, 1) }.getOrNull()
             val fs = boot?.let { filesystemOf(it) }
             val fsSectors = boot?.let { declaredSectors(it, fs, device.blockSize) } ?: 0L
-            val nextStart = list.getOrNull(position + 1)?.start ?: device.totalBlocks
+            val nextStart = list.getOrNull(position + 1)?.start ?: limit
             val minSectors = if (fs != null && fsSectors > 0) minOf(fsSectors, e.sectors) else e.sectors
-            val maxSectors = nextStart - e.start
+            val maxSectors = maxOf(e.sectors, nextStart - e.start)
             array.put(
                 JSONObject().apply {
                     put("index", e.index)
@@ -111,13 +194,12 @@ object PartitionManager {
                     put("fsSectors", fsSectors)
                     put("minSizeSectors", minSectors)
                     put("maxSizeSectors", maxSectors)
-                    put("canDelete", !gpt)
-                    put("canResize", !gpt && maxSectors > 0)
+                    put("canDelete", true)
+                    put("canResize", maxSectors > 0)
                     put("resizesFilesystem", fs == "NTFS")
                     put(
                         "note",
                         when {
-                            gpt -> "This drive uses a GPT table, which this editor does not change"
                             fs == null -> "The filesystem here is not recognised, so its size cannot be changed safely"
                             fs == "NTFS" -> "NTFS is resized together with the partition"
                             else -> "The partition can be resized; the $fs filesystem keeps its current size"
@@ -126,37 +208,44 @@ object PartitionManager {
                 }
             )
         }
-        val lastEnd = list.maxOfOrNull { it.start + it.sectors } ?: alignment(device)
+        val lastEnd = list.maxOfOrNull { it.start + it.sectors } ?: minStart
+        val freeStart = alignUp(maxOf(lastEnd, minStart), alignment(device))
         return JSONObject().apply {
             put("ok", true)
-            put("table", if (gpt) "GPT" else "MBR")
-            put("editable", !gpt)
+            put("table", if (g != null) "GPT" else "MBR")
+            put("editable", true)
             put("blockSize", device.blockSize)
             put("totalSectors", device.totalBlocks)
-            put("freeStartLba", maxOf(lastEnd, alignment(device)))
-            put("freeSectors", maxOf(0L, device.totalBlocks - maxOf(lastEnd, alignment(device))))
+            put("usableEnd", limit)
+            put("freeStartLba", freeStart)
+            put("freeSectors", maxOf(0L, limit - freeStart))
             put("partitions", array)
-            put("summary", "${array.length()} partition(s) on this drive")
+            put("summary", "${array.length()} partition(s) on this drive" + if (g != null) " (GPT)" else " (MBR)")
         }
     }
 
     fun deleteDevice(device: BlockDevice, index: Int): JSONObject {
         val s = runCatching { device.readBlocks(0, 1) }.getOrNull()
             ?: return failure("The first sector of the drive could not be read")
-        if ((s[446 + 4].toInt() and 0xFF) == 0xEE) return failure("This drive uses a GPT table, which this editor does not change")
-        if (index !in 1..4) return failure("There is no partition $index on this drive")
-        val entries = entries(device)
-        entries[index - 1] ?: return failure("Slot $index of the partition table is already empty")
+        val g = if (isProtective(s)) readGpt(device) ?: return failure("The GPT header could not be read") else null
+        val maxIndex = g?.count ?: 4
+        if (index !in 1..maxIndex) return failure("There is no partition $index on this drive")
+        entries(device)[index - 1] ?: return failure("Slot $index of the partition table is already empty")
 
-        ByteArray(16).copyInto(s, 446 + (index - 1) * 16)
-        // Keep exactly one bootable entry so firmware still finds something to start.
-        if ((0 until 4).none { (s[446 + it * 16].toInt() and 0xFF) == 0x80 }) {
-            val first = (0 until 4).firstOrNull { (s[446 + it * 16 + 4].toInt() and 0xFF) != 0 }
-            if (first != null) s[446 + first * 16] = 0x80.toByte()
+        if (g != null) {
+            ByteArray(g.entrySize).copyInto(g.entries, (index - 1) * g.entrySize)
+            writeGpt(device, g)
+        } else {
+            ByteArray(16).copyInto(s, 446 + (index - 1) * 16)
+            // Keep exactly one bootable entry so firmware still finds something to start.
+            if ((0 until 4).none { (s[446 + it * 16].toInt() and 0xFF) == 0x80 }) {
+                val first = (0 until 4).firstOrNull { (s[446 + it * 16 + 4].toInt() and 0xFF) != 0 }
+                if (first != null) s[446 + first * 16] = 0x80.toByte()
+            }
+            s[510] = 0x55
+            s[511] = 0xAA.toByte()
+            device.writeBlocks(0, s)
         }
-        s[510] = 0x55
-        s[511] = 0xAA.toByte()
-        device.writeBlocks(0, s)
         runCatching { device.synchronizeCache() }
         return listDevice(device).put(
             "summary",
@@ -173,14 +262,13 @@ object PartitionManager {
     ): JSONObject {
         val s = runCatching { device.readBlocks(0, 1) }.getOrNull()
             ?: return failure("The first sector of the drive could not be read")
-        if ((s[446 + 4].toInt() and 0xFF) == 0xEE) return failure("This drive uses a GPT table, which this editor does not change")
-        if (index !in 1..4) return failure("There is no partition $index on this drive")
+        val g = if (isProtective(s)) readGpt(device) ?: return failure("The GPT header could not be read") else null
         val all = entries(device).filterNotNull().sortedBy { it.start }
         val target = all.firstOrNull { it.index == index }
-            ?: return failure("Slot $index of the partition table is empty")
+            ?: return failure("There is no partition $index on this drive")
         if (newSectors <= 0) return failure("The new size must be larger than zero")
 
-        val next = all.firstOrNull { it.start > target.start }?.start ?: device.totalBlocks
+        val next = all.firstOrNull { it.start > target.start }?.start ?: endLimit(device, g)
         val maxSectors = next - target.start
         if (newSectors > maxSectors) {
             return failure(
@@ -208,21 +296,22 @@ object PartitionManager {
 
         val notes = mutableListOf<String>()
         // The table entry first: the filesystem is only touched after the geometry is real.
-        put32(s, 446 + (index - 1) * 16 + 12, newSectors)
-        s[510] = 0x55
-        s[511] = 0xAA.toByte()
-        device.writeBlocks(0, s)
+        if (g != null) {
+            put64(g.entries, (index - 1) * g.entrySize + 40, target.start + newSectors - 1)
+            writeGpt(device, g)
+        } else {
+            put32(s, 446 + (index - 1) * 16 + 12, newSectors)
+            s[510] = 0x55
+            s[511] = 0xAA.toByte()
+            device.writeBlocks(0, s)
+        }
 
         if (fs == "NTFS" && boot != null) {
             val fixed = boot.copyOf()
             put64(fixed, 40, newSectors - 1)
-            // Write the end-of-partition copy first: while it is being written the
-            // healthy main sector is still the recovery source.
             device.writeBlocks(target.start + newSectors - 1, fixed)
             device.writeBlocks(target.start, fixed)
             if (target.sectors != newSectors) {
-                // The old copy now sits inside or outside the volume: clear it so a
-                // stale boot sector cannot be mistaken for a second volume later.
                 val oldCopy = target.start + target.sectors - 1
                 if (oldCopy != target.start + newSectors - 1 && oldCopy < device.totalBlocks) {
                     runCatching { device.writeBlocks(oldCopy, ByteArray(device.blockSize)) }
@@ -252,11 +341,17 @@ object PartitionManager {
     ): JSONObject {
         val s = runCatching { device.readBlocks(0, 1) }.getOrNull()
             ?: return failure("The first sector of the drive could not be read")
-        if ((s[446 + 4].toInt() and 0xFF) == 0xEE) return failure("This drive uses a GPT table, which this editor does not change")
-        val slot = (0 until 4).firstOrNull { (s[446 + it * 16 + 4].toInt() and 0xFF) == 0 }
-            ?: return failure("The partition table already holds four partitions. Delete one first.")
-        if (startLba < alignment(device)) return failure("A partition cannot start before sector ${alignment(device)}")
-        if (sectors <= 0 || startLba + sectors > device.totalBlocks) {
+        val g = if (isProtective(s)) readGpt(device) ?: return failure("The GPT header could not be read") else null
+        val slot = if (g != null) {
+            (0 until g.count).firstOrNull { i -> (0 until 16).all { g.entries[i * g.entrySize + it].toInt() == 0 } }
+                ?: return failure("The partition table has no free slot left. Delete a partition first.")
+        } else {
+            (0 until 4).firstOrNull { (s[446 + it * 16 + 4].toInt() and 0xFF) == 0 }
+                ?: return failure("The partition table already holds four partitions. Delete one first.")
+        }
+        val minStart = maxOf(alignment(device), g?.firstUsable ?: 0L)
+        if (startLba < minStart) return failure("A partition cannot start before sector $minStart")
+        if (sectors <= 0 || startLba + sectors > endLimit(device, g)) {
             return failure("A partition of $sectors sectors does not fit at sector $startLba on this drive")
         }
         val clash = entries(device).filterNotNull().firstOrNull { e ->
@@ -271,7 +366,6 @@ object PartitionManager {
             "EXFAT" -> Filesystem.EXFAT
             else -> Filesystem.FAT32
         }
-        // FAT32/exFAT formatters need the real USB transport; NTFS only needs writes.
         val usb = device as? UsbBulkStorageDevice
         when (fs) {
             Filesystem.NTFS -> NtfsFormatter.format(device, startLba, sectors, label)
@@ -284,18 +378,34 @@ object PartitionManager {
                 ExfatFormatter.format(usb, startLba, sectors, label)
             }
         }
-        val o = 446 + slot * 16
-        ByteArray(16).copyInto(s, o)
-        s[o + 4] = when (fs) {
-            Filesystem.FAT32 -> 0x0C
-            else -> 0x07
+        if (g != null) {
+            val o = slot * g.entrySize
+            ByteArray(g.entrySize).copyInto(g.entries, o)
+            BASIC_DATA_GUID.copyInto(g.entries, o)
+            val u = java.util.UUID.randomUUID()
+            put64(g.entries, o + 16, u.mostSignificantBits)
+            put64(g.entries, o + 24, u.leastSignificantBits)
+            put64(g.entries, o + 32, startLba)
+            put64(g.entries, o + 40, startLba + sectors - 1)
+            label.take(36).forEachIndexed { i, c ->
+                g.entries[o + 56 + i * 2] = (c.code and 0xFF).toByte()
+                g.entries[o + 57 + i * 2] = ((c.code shr 8) and 0xFF).toByte()
+            }
+            writeGpt(device, g)
+        } else {
+            val o = 446 + slot * 16
+            ByteArray(16).copyInto(s, o)
+            s[o + 4] = when (fs) {
+                Filesystem.FAT32 -> 0x0C
+                else -> 0x07
+            }
+            put32(s, o + 8, startLba)
+            put32(s, o + 12, minOf(sectors, 0xFFFFFFFFL))
+            if ((0 until 4).none { (s[446 + it * 16].toInt() and 0xFF) == 0x80 }) s[o] = 0x80.toByte()
+            s[510] = 0x55
+            s[511] = 0xAA.toByte()
+            device.writeBlocks(0, s)
         }
-        put32(s, o + 8, startLba)
-        put32(s, o + 12, minOf(sectors, 0xFFFFFFFFL))
-        if ((0 until 4).none { (s[446 + it * 16].toInt() and 0xFF) == 0x80 }) s[o] = 0x80.toByte()
-        s[510] = 0x55
-        s[511] = 0xAA.toByte()
-        device.writeBlocks(0, s)
         runCatching { device.synchronizeCache() }
         return listDevice(device).put(
             "summary",
@@ -307,6 +417,8 @@ object PartitionManager {
 
     private fun alignment(device: BlockDevice): Long =
         (1024 * 1024 / device.blockSize).coerceAtLeast(1).toLong()
+
+    private fun alignUp(v: Long, a: Long): Long = if (a <= 1) v else ((v + a - 1) / a) * a
 
     private fun hasSignature(s: ByteArray): Boolean =
         s.size >= 512 && (s[510].toInt() and 0xFF) == 0x55 && (s[511].toInt() and 0xFF) == 0xAA
