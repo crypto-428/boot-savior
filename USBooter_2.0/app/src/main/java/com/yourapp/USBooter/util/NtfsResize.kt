@@ -26,16 +26,19 @@ object NtfsResize {
     /** Smallest partition size in device sectors that keeps every used cluster, or null if unreadable. */
     fun minimumSectors(device: BlockDevice, start: Long, boot: ByteArray): Long? = runCatching {
         val g = geometry(boot, device.blockSize) ?: return null
-        val bits = readBitmap(device, start, g).second
+        val (rec, bits) = readBitmap(device, start, g)
+        val own = bitmapRuns(rec.second)
         // Bits past the current cluster count are padding (always set), so ignore them.
         val current = minOf(le64(boot, 40) / g.spc, bits.size * 8L)
         var last = -1L
         var c = current - 1
         while (c >= 0) {
-            if ((bits[(c / 8).toInt()].toInt() shr (c % 8).toInt()) and 1 != 0) { last = c; break }
+            val used = (bits[(c / 8).toInt()].toInt() shr (c % 8).toInt()) and 1 != 0
+            if (used && own.none { c >= it.first && c < it.first + it.second }) { last = c; break }
             c--
         }
-        val clusters = maxOf(last + 1, 1L); System.err.println("DBG last=$last current=$current")
+        // The free-space map lives at the volume's end, so leave room to move it.
+        val clusters = maxOf(last + 1, 1L) + bitmapClustersFor(current, g) + 1
         // +1 sector for the backup boot sector, then round up to 1 MiB.
         val sectors = clusters * g.spc * g.scale + 1
         val mib = 1_048_576L / device.blockSize
@@ -54,7 +57,7 @@ object NtfsResize {
         val bitmapBytes = ((clusters + 63) / 64) * 8
         val bmAttr = findAttr(bitmapRec.second, 0x80, null) ?: return "The NTFS \$Bitmap record is damaged"
         val alloc = le64(bitmapRec.second, bmAttr + 0x28)
-        if (bitmapBytes > alloc) return "The NTFS free-space map has no room to grow; the filesystem keeps its size"
+        if (bitmapBytes > alloc && bitmapRuns(bitmapRec.second).none { it.first + it.second > clusters }) return "The NTFS free-space map has no room to grow; the filesystem keeps its size"
 
         // $BadClus:$Bad — one sparse run whose length is the cluster count.
         val bad = readRecord(device, start, g, 8)
@@ -65,17 +68,46 @@ object NtfsResize {
         if ((hdr shr 4) != 0 || lenBytes == 0) return "The NTFS \$BadClus list is not empty; resize refused"
         if (clusters >= (1L shl (8 * lenBytes - 1))) return "The NTFS \$BadClus list cannot describe the new size"
 
-        // 1. new area free, padding past the new end set (NTFS convention), rest zero
+        // 1. free-space map: clear its old clusters, move it if it would fall past the new end
         val oldClusters = le64(boot, 40) / g.spc
-        for (c in minOf(oldClusters, clusters) until bits.size * 8L) {
+        val rec = bitmapRec.second
+        var bmRuns = bitmapRuns(rec)
+        val need = bitmapClustersFor(clusters, g)
+        fun setBit(c: Long, on: Boolean) {
             val i = (c / 8).toInt(); val m = 1 shl (c % 8).toInt()
-            val set = c >= clusters && c < bitmapBytes * 8
-            bits[i] = (if (set) bits[i].toInt() or m else bits[i].toInt() and m.inv()).toByte()
+            bits[i] = (if (on) bits[i].toInt() or m else bits[i].toInt() and m.inv()).toByte()
         }
-        writeBitmap(device, start, g, bitmapRec.second, bmAttr, bits)
-        // 2. $Bitmap sizes
-        put64(bitmapRec.second, bmAttr + 0x30, bitmapBytes)
-        put64(bitmapRec.second, bmAttr + 0x38, bitmapBytes)
+        val moving = bmRuns.any { it.first + it.second > clusters }
+        if (moving) {
+            for ((l, n) in bmRuns) for (c in l until minOf(l + n, oldClusters)) setBit(c, false)
+            var run = 0L; var at = -1L; var c = 0L
+            while (c < clusters) {
+                if ((bits[(c / 8).toInt()].toInt() shr (c % 8).toInt()) and 1 == 0) {
+                    run++; if (run == need) { at = c - need + 1; break }
+                } else run = 0
+                c++
+            }
+            if (at < 0) return "There is no free space inside the volume to move the NTFS free-space map"
+            for (x in at until at + need) setBit(x, true)
+            bmRuns = listOf(at to need)
+        }
+        // new area free, padding past the new end set (NTFS convention), rest zero
+        for (x in minOf(oldClusters, clusters) until bits.size * 8L) setBit(x, x >= clusters && x < bitmapBytes * 8)
+        val out = if (moving) bits.copyOf((need * g.clusterBytes).toInt()) else bits
+        writeBits(device, start, g, bmRuns, out)
+        // 2. $Bitmap run list and sizes
+        if (moving) {
+            val runOffB = bmAttr + le16(rec, bmAttr + 0x20)
+            val attrLen = le32(rec, bmAttr + 4).toInt()
+            val enc = encodeRun(need, bmRuns[0].first)
+            if (runOffB + enc.size + 1 > bmAttr + attrLen) return "The NTFS free-space map record has no room"
+            for (i in runOffB until bmAttr + attrLen) rec[i] = 0
+            enc.copyInto(rec, runOffB)
+            put64(rec, bmAttr + 0x18, need - 1)
+            put64(rec, bmAttr + 0x28, need * g.clusterBytes)
+        }
+        put64(rec, bmAttr + 0x30, bitmapBytes)
+        put64(rec, bmAttr + 0x38, bitmapBytes)
         writeRecord(device, start, g, 6, bitmapRec)
         // 3. $BadClus sizes and run length
         val cbytes = clusters * g.clusterBytes
@@ -169,6 +201,36 @@ object NtfsResize {
         }
         for (i in data until alloc) out[i] = 0
         return r to out
+    }
+
+    private fun bitmapClustersFor(clusters: Long, g: Geometry): Long {
+        val bytes = ((clusters + 63) / 64) * 8
+        return (bytes + g.clusterBytes - 1) / g.clusterBytes
+    }
+
+    private fun bitmapRuns(rec: ByteArray): List<Pair<Long, Long>> =
+        findAttr(rec, 0x80, null)?.let { runs(rec, it) } ?: emptyList()
+
+    private fun writeBits(d: BlockDevice, start: Long, g: Geometry, rl: List<Pair<Long, Long>>, bits: ByteArray) {
+        var pos = 0
+        for ((lcn, len) in rl) {
+            val bytes = (len * g.clusterBytes).toInt()
+            val chunk = ByteArray(bytes)
+            bits.copyInto(chunk, 0, pos, minOf(bits.size, pos + bytes))
+            d.writeBlocks(start + lcn * g.clusterBytes / d.blockSize, chunk); pos += bytes
+            if (pos >= bits.size) break
+        }
+    }
+
+    private fun encodeRun(length: Long, lcn: Long): ByteArray {
+        fun bytes(v: Long, signed: Boolean): ByteArray {
+            val out = ArrayList<Byte>(); var x = v
+            do { out += x.toByte(); x = x shr 8 } while (if (signed) !(x == 0L && out.last() >= 0) && !(x == -1L && out.last() < 0) else x != 0L)
+            return out.toByteArray()
+        }
+        val l = bytes(length, false).let { if (it.last() < 0) it + 0 else it }
+        val o = bytes(lcn, true)
+        return byteArrayOf(((o.size shl 4) or l.size).toByte()) + l + o
     }
 
     private fun writeBitmap(d: BlockDevice, start: Long, g: Geometry, rec: ByteArray, a: Int, bits: ByteArray) {
