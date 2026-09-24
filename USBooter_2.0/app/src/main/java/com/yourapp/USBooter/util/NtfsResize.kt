@@ -32,7 +32,7 @@ object NtfsResize {
             val v = bits[i].toInt() and 0xFF
             if (v != 0) { last = i * 8L + (7 - Integer.numberOfLeadingZeros(v shl 24)); break }
         }
-        val clusters = maxOf(last + 1, 1L)
+        val clusters = maxOf(last + 1, 1L); System.err.println("NTFSMIN last=$last bytes=${bits.size} spc=${g.spc}")
         // +1 sector for the backup boot sector, then round up to 1 MiB.
         val sectors = clusters * g.spc * g.scale + 1
         val mib = 1_048_576L / device.blockSize
