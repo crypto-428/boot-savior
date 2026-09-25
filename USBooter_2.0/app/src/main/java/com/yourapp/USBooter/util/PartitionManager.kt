@@ -184,6 +184,8 @@ object PartitionManager {
             val nextStart = list.getOrNull(position + 1)?.start ?: limit
             val ntfsMin = if (fs == "NTFS" && boot != null) NtfsResize.minimumSectors(device, e.start, boot)
                 else if ((fs == "FAT32" || fs == "exFAT") && boot != null) FatShrink.minimumSectors(device, e.start, boot, fs)
+                else if ((fs == "FAT16" || fs == "FAT12") && boot != null) FatLegacyFormatter.minimumSectors(device, e.start, boot)
+                else if (fs == "swap") 80L * 512 / device.blockSize
                 else null
             val minSectors = when {
                 ntfsMin != null -> minOf(ntfsMin, e.sectors)
@@ -205,13 +207,16 @@ object PartitionManager {
                     put("maxSizeSectors", maxSectors)
                     put("canDelete", true)
                     put("canResize", maxSectors > 0)
-                    put("resizesFilesystem", fs == "NTFS" || fs == "FAT32" || fs == "exFAT")
+                    put("resizesFilesystem", fs in setOf("NTFS", "FAT32", "exFAT", "FAT16", "FAT12", "swap"))
                     put(
                         "note",
                         when {
                             fs == null -> "The filesystem here is not recognised, so its size cannot be changed safely"
                             fs == "NTFS" -> "NTFS is resized together with the partition"
                             fs == "FAT32" || fs == "exFAT" -> "When shrinking, files near the end are moved first so none are lost"
+                            fs == "FAT16" || fs == "FAT12" -> "The $fs volume is resized with the partition; it can shrink down to its last stored file"
+                            fs == "swap" -> "Linux swap is recreated at the new size; it holds no files"
+                            fs == "ext4" || fs == "ext3" || fs == "ext2" -> "Linux partitions can be extended; the $fs filesystem keeps its size until Linux grows it (resize2fs). Shrinking is not supported"
                             else -> "The partition can be resized; the $fs filesystem keeps its current size"
                         }
                     )
@@ -288,8 +293,29 @@ object PartitionManager {
         }
 
         val boot = runCatching { device.readBlocks(target.start, 1) }.getOrNull()
-        val fs = boot?.let { filesystemOf(it) }
-        val fsSectors = if (boot != null) declaredSectors(boot, fs, device.blockSize) else 0L
+        val linux = if (boot?.let { filesystemOf(it) } == null) LinuxFs.detect(device, target.start) else null
+        if (linux == "swap") return resizeSwap(device, s, g, target, index, newSectors)
+        if (linux != null) {
+            val declared = LinuxFs.declaredSectors(device, target.start)
+            if (newSectors < declared && !allowDataLoss) return failure(
+                "Partition $index holds a $linux filesystem, which the app cannot shrink yet. Shrink it from Linux " +
+                    "(resize2fs) first, or allow data loss explicitly."
+            )
+        }
+        val fs = boot?.let { filesystemOf(it) } ?: linux
+        val fsSectors = if (linux != null) LinuxFs.declaredSectors(device, target.start)
+            else if (boot != null) declaredSectors(boot, fs, device.blockSize) else 0L
+        var legacyDone = false
+        if ((fs == "FAT16" || fs == "FAT12") && boot != null) {
+            val min = FatLegacyFormatter.minimumSectors(device, target.start, boot)
+            if (min != null && newSectors < min && !allowDataLoss) return failure(
+                "Partition $index has files that need at least $min sectors, so it cannot be shrunk to $newSectors sectors. Choose a larger size."
+            )
+            if (min != null && newSectors >= min && newSectors < fsSectors) {
+                FatLegacyFormatter.resize(device, target.start, newSectors, boot)?.let { return failure(it) }
+                legacyDone = true
+            }
+        }
         val ntfsMin = if (fs == "NTFS" && boot != null) NtfsResize.minimumSectors(device, target.start, boot) else null
         if (fs == "NTFS" && ntfsMin != null && newSectors < ntfsMin) {
             return failure(
@@ -309,7 +335,7 @@ object PartitionManager {
             FatShrink.resize(device, target.start, newSectors, boot, fs!!)?.let { return failure(it) }
             fatDone = true
         }
-        if (fs != "NTFS" && !fatDone && newSectors < fsSectors && !allowDataLoss) {
+        if (fs != "NTFS" && !fatDone && !legacyDone && newSectors < fsSectors && !allowDataLoss) {
             return failure(
                 "Partition $index holds a ${fs ?: "unknown"} filesystem that needs $fsSectors sectors. Shrinking it to " +
                     "$newSectors sectors would cut off files at the end of the volume, so it was not done. " +
@@ -348,6 +374,9 @@ object PartitionManager {
                 }
             }
             notes += "The NTFS volume and its boot-sector copy were resized with the partition"
+        } else if ((fs == "FAT16" || fs == "FAT12") && boot != null && (legacyDone || newSectors > fsSectors)) {
+            if (!legacyDone) FatLegacyFormatter.resize(device, target.start, newSectors, boot)?.let { notes += it }
+            notes += "The $fs volume was resized with the partition (up to what its FAT can address)"
         } else if (fatDone) {
             notes += "Files past the new end were moved and the $fs filesystem was shrunk with the partition"
         } else if (fs != null) {
@@ -362,6 +391,25 @@ object PartitionManager {
             "summary",
             "Partition $index was $verb from ${target.sectors} to $newSectors sectors. " + notes.joinToString(". ")
         )
+    }
+
+    /** Swap holds nothing across reboots: move the table entry, then write a fresh header at the new size. */
+    private fun resizeSwap(device: BlockDevice, s: ByteArray, g: GptTable?, target: Entry, index: Int, newSectors: Long): JSONObject {
+        if (newSectors * device.blockSize < 40960) return failure("Linux swap needs at least 40 KB")
+        val head = runCatching { device.readBlocks(target.start, (4096 / device.blockSize).coerceAtLeast(1)) }.getOrNull()
+        val label = head?.let { String(it, 1052, 16, Charsets.US_ASCII).trimEnd('\u0000', ' ') } ?: ""
+        if (g != null) {
+            put64(g.entries, (index - 1) * g.entrySize + 40, target.start + newSectors - 1)
+            writeGpt(device, g)
+        } else {
+            put32(s, 446 + (index - 1) * 16 + 12, newSectors)
+            s[510] = 0x55; s[511] = 0xAA.toByte()
+            device.writeBlocks(0, s)
+        }
+        LinuxFs.formatSwap(device, target.start, newSectors, label)
+        val verb = if (newSectors > target.sectors) "extended" else "shrunk"
+        return listDevice(device).put("summary",
+            "Partition $index was $verb from ${target.sectors} to $newSectors sectors. Linux swap was recreated at the new size")
     }
 
     fun createDevice(
