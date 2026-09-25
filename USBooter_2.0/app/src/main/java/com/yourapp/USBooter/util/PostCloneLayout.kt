@@ -369,6 +369,7 @@ object PostCloneLayout {
             Filesystem.FAT32 -> Fat32Formatter.format(device, start, sectors, "DATA")
             Filesystem.EXFAT -> ExfatFormatter.format(device, start, sectors, "DATA")
             Filesystem.NTFS -> NtfsFormatter.format(device, start, sectors, "DATA")
+            Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(device, start, sectors, "DATA", fs == Filesystem.FAT12)
         }
     }
 

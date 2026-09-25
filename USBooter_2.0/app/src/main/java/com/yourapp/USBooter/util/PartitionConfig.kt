@@ -11,7 +11,9 @@ import java.io.Serializable
 enum class Filesystem(val displayName: String) : Serializable {
     FAT32("FAT32"),
     EXFAT("exFAT"),
-    NTFS("NTFS")
+    NTFS("NTFS"),
+    FAT16("FAT16"),
+    FAT12("FAT12")
 }
 
 enum class PartitionTableType(val displayName: String) : Serializable {
