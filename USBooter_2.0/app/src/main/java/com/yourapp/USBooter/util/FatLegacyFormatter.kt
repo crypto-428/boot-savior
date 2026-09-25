@@ -71,7 +71,77 @@ object FatLegacyFormatter {
         device.writeBlocks(start + 1 + 2 * fatSz + rootSectors, ByteArray(spc * bps))
     }
 
+    private class Geo(val bps: Int, val spc: Int, val reserved: Int, val fats: Int, val fatSz: Long,
+                      val rootSectors: Int, val total: Long, val fat12: Boolean) {
+        val dataStart get() = reserved + fats * fatSz + rootSectors
+        /** Clusters the FAT tables have room for (not the volume). */
+        val fatCapacity get() = (if (fat12) fatSz * bps * 2 / 3 else fatSz * bps / 2) - 2
+        fun clustersFor(sectors: Long) = (sectors - dataStart) / spc
+    }
+
+    private fun geo(boot: ByteArray): Geo? {
+        val bps = le16(boot, 11); val spc = boot[13].toInt() and 0xFF
+        if (bps !in 512..4096 || spc == 0) return null
+        val small = le16(boot, 19).toLong()
+        val total = if (small > 0) small else le32(boot, 32)
+        val t = String(boot, 54, 5, Charsets.US_ASCII)
+        val fat12 = t == "FAT12"
+        if (!fat12 && t != "FAT16") return null
+        return Geo(bps, spc, le16(boot, 14), boot[16].toInt() and 0xFF, le16(boot, 22).toLong(),
+            (le16(boot, 17) * 32 + bps - 1) / bps, total, fat12)
+    }
+
+    private fun entry(fat: ByteArray, n: Long, fat12: Boolean): Int = if (fat12) {
+        val o = (n * 3 / 2).toInt()
+        val v = le16(fat, o)
+        if (n % 2 == 0L) v and 0xFFF else v shr 4
+    } else le16(fat, (n * 2).toInt())
+
+    private fun readFat(device: BlockDevice, start: Long, g: Geo): ByteArray {
+        val per = g.bps / device.blockSize
+        return device.readBlocks(start + g.reserved.toLong() * per, (g.fatSz * per).toInt())
+    }
+
+    /** Smallest size (device sectors) keeping every used cluster, or null if not FAT12/16. */
+    fun minimumSectors(device: BlockDevice, start: Long, boot: ByteArray): Long? = runCatching {
+        val g = geo(boot) ?: return null
+        val fat = readFat(device, start, g)
+        val clusters = minOf(g.clustersFor(g.total), g.fatCapacity)
+        var last = 1L
+        for (c in 2 until clusters + 2) if (entry(fat, c, g.fat12) != 0) last = c
+        val minClusters = maxOf(last - 1, if (g.fat12) 1L else 4085L)
+        (g.dataStart + minClusters * g.spc) * (g.bps / device.blockSize)
+    }.getOrNull()
+
+    /** Largest size (device sectors) the existing FAT tables can address. */
+    fun maximumSectors(boot: ByteArray, blockSize: Int): Long? {
+        val g = geo(boot) ?: return null
+        val cap = minOf(g.fatCapacity, if (g.fat12) 4084L else 65524L)
+        return (g.dataStart + cap * g.spc) * (g.bps / blockSize)
+    }
+
+    /**
+     * Shrinks or grows a FAT12/FAT16 volume in place by rewriting its size. Nothing
+     * moves: shrinking is refused below the last used cluster, growing stops at what
+     * the FAT tables can address. Returns an error message, or null on success.
+     */
+    fun resize(device: BlockDevice, start: Long, newSectors: Long, boot: ByteArray): String? {
+        val g = geo(boot) ?: return "This is not a FAT16 or FAT12 volume"
+        val per = g.bps / device.blockSize
+        val min = minimumSectors(device, start, boot) ?: return "The FAT table could not be read"
+        val max = maximumSectors(boot, device.blockSize)!!
+        if (newSectors < min) return "Files are stored up to sector $min, so the volume cannot be shrunk to $newSectors sectors"
+        val target = minOf(newSectors, max) / per
+        val b = boot.copyOf()
+        if (target < 65536) { put16(b, 19, target.toInt()); put32(b, 32, 0) } else { put16(b, 19, 0); put32(b, 32, target) }
+        return runCatching { device.writeBlocks(start, b); null }.getOrElse { "The boot sector could not be written: ${it.message}" }
+    }
+
+    private fun le16(b: ByteArray, o: Int) = (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8)
+    private fun le32(b: ByteArray, o: Int) = (le16(b, o).toLong()) or (le16(b, o + 2).toLong() shl 16)
+
     private fun clean(label: String): String {
+
         val s = label.uppercase().filter { it in 'A'..'Z' || it in '0'..'9' || it in " _-" }.take(11)
         return (s.ifBlank { "NO NAME" }).padEnd(11)
     }
