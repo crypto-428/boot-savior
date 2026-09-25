@@ -29,7 +29,7 @@ for f in BlockDevice BlockWriter NtfsFormatter Mbr Gpt Fat32Formatter Fat32Write
   cp "$MAIN/$f.kt" "$WORK/src/"
 done
 for f in DriveImages FakeBlockDevice NtfsRebuildTest PartitionRepairTest \
-         RepairTranslationCoverageTest PartitionManagerGptTest NtfsShrinkTest FatShrinkTest ExfatShrinkTest; do
+         RepairTranslationCoverageTest PartitionManagerGptTest NtfsShrinkTest FatShrinkTest ExfatShrinkTest LinuxFsTest; do
   cp "$TEST/$f.kt" "$WORK/src/"
 done
 
@@ -95,4 +95,5 @@ java -cp "$WORK/out:$RES:$JARS:$STDLIB" org.junit.runner.JUnitCore \
   com.yourapp.USBooter.util.PartitionManagerGptTest \
   com.yourapp.USBooter.util.NtfsShrinkTest \
   com.yourapp.USBooter.util.FatShrinkTest \
-  com.yourapp.USBooter.util.ExfatShrinkTest
+  com.yourapp.USBooter.util.ExfatShrinkTest \
+  com.yourapp.USBooter.util.LinuxFsTest
