@@ -93,5 +93,5 @@ java -cp "$WORK/out:$RES:$JARS:$STDLIB" org.junit.runner.JUnitCore \
   com.yourapp.USBooter.util.NtfsRebuildTest \
   com.yourapp.USBooter.util.RepairTranslationCoverageTest \
   com.yourapp.USBooter.util.PartitionManagerGptTest \
-  com.yourapp.USBooter.util.NtfsShrinkTest
+  com.yourapp.USBooter.util.NtfsShrinkTest \
   com.yourapp.USBooter.util.FatShrinkTest
