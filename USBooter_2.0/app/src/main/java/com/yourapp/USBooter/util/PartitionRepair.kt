@@ -74,6 +74,9 @@ object PartitionRepair {
             "EXFAT" -> Filesystem.EXFAT
             "FAT16" -> Filesystem.FAT16
             "FAT12" -> Filesystem.FAT12
+            "EXT4" -> Filesystem.EXT4
+            "EXT2" -> Filesystem.EXT2
+            "SWAP", "LINUX_SWAP" -> Filesystem.LINUX_SWAP
             else -> Filesystem.FAT32
         }
         progress(5, "Erasing the old partition table")
@@ -102,6 +105,7 @@ object PartitionRepair {
             Filesystem.EXFAT -> ExfatFormatter.format(usb, start, sectors, label)
             Filesystem.NTFS -> NtfsFormatter.format(device, start, sectors, label)
             Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(device, start, sectors, label, fs == Filesystem.FAT12)
+            Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, start, sectors, label, fs)
         }
         progress(90, "Flushing the drive cache")
         runCatching { device.synchronizeCache() }

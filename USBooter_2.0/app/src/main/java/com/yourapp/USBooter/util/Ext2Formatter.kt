@@ -41,26 +41,35 @@ object Ext2Formatter {
      * @param rootFile optional (name, contents) written into the root directory
      */
     fun format(
-        device: UsbBulkStorageDevice,
+        device: BlockDevice,
         partitionStartLba: Long,
         partitionSectorCount: Long,
         volumeLabel: String,
-        rootFile: Pair<String, ByteArray>? = null
+        rootFile: Pair<String, ByteArray>? = null,
+        /** ext4: extents + journal + ext4-only feature flags, so Linux and blkid see a real ext4 volume. */
+        ext4: Boolean = false
     ) {
         val sectorSize = device.blockSize
         require(BLOCK_SIZE % sectorSize == 0) { "ext2 needs a sector size that divides 4096" }
         val sectorsPerBlock = BLOCK_SIZE / sectorSize
 
-        val fsBlocks = (partitionSectorCount * sectorSize / BLOCK_SIZE)
+        var fsBlocks = (partitionSectorCount * sectorSize / BLOCK_SIZE)
             .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        require(fsBlocks > 512) { "The persistence partition is too small for a filesystem" }
+        require(fsBlocks > 512) { "This partition is too small for a Linux filesystem (at least 2 MB is needed)" }
         require(rootFile == null || rootFile.second.size <= BLOCK_SIZE) {
             "Only a single-block root file is supported"
         }
 
-        val groups = (fsBlocks + BLOCKS_PER_GROUP - 1) / BLOCKS_PER_GROUP
-        val gdtBlocks = (groups * 32 + BLOCK_SIZE - 1) / BLOCK_SIZE
         val inodeTableBlocks = INODES_PER_GROUP * INODE_SIZE / BLOCK_SIZE
+        var groups = (fsBlocks + BLOCKS_PER_GROUP - 1) / BLOCKS_PER_GROUP
+        var gdtBlocks = (groups * 32 + BLOCK_SIZE - 1) / BLOCK_SIZE
+        // A trailing group too small for its own metadata is left out of the volume.
+        val tail = fsBlocks - (groups - 1) * BLOCKS_PER_GROUP
+        if (groups > 1 && tail < 1 + gdtBlocks + 2 + inodeTableBlocks + 64) {
+            fsBlocks -= tail
+            groups -= 1
+            gdtBlocks = (groups * 32 + BLOCK_SIZE - 1) / BLOCK_SIZE
+        }
         val metaPerGroup = 1 /* sb copy */ + gdtBlocks + 2 /* bitmaps */ + inodeTableBlocks
 
         // ── Group 0 data blocks: root dir, lost+found dir, optional file ──
@@ -68,7 +77,20 @@ object Ext2Formatter {
         val rootDirBlock = group0FirstFree
         val lostFoundBlock = group0FirstFree + 1
         val fileBlock = if (rootFile != null && rootFile.second.isNotEmpty()) group0FirstFree + 2 else -1
-        val group0DataUsed = if (fileBlock >= 0) 3 else 2
+        val baseDataUsed = if (fileBlock >= 0) 3 else 2
+        val group0Size = minOf(BLOCKS_PER_GROUP, fsBlocks)
+        val journalBlocks = if (!ext4) 0 else {
+            val wanted = when {
+                fsBlocks < 32_768 -> 1024
+                fsBlocks < 262_144 -> 4096
+                fsBlocks < 524_288 -> 8192
+                else -> 16_384
+            }
+            val room = group0Size - metaPerGroup - baseDataUsed - 16
+            if (room >= wanted) wanted else if (room >= 1024) 1024 else 0
+        }
+        val journalStart = metaPerGroup + baseDataUsed
+        val group0DataUsed = baseDataUsed + journalBlocks
 
         fun writeBlock(index: Int, data: ByteArray) {
             val padded = if (data.size == BLOCK_SIZE) data else data.copyOf(BLOCK_SIZE)
@@ -130,9 +152,15 @@ object Ext2Formatter {
         s.putInt(84, FIRST_INO)
         s.putShort(88, INODE_SIZE.toShort())
         s.putShort(90, 0)               // block group nr
-        s.putInt(92, 0)                 // feature_compat
-        s.putInt(96, 0x0002)            // feature_incompat: filetype
-        s.putInt(100, 0)                // feature_ro_compat
+        if (ext4) {
+            s.putInt(92, if (journalBlocks > 0) 0x0004 else 0)   // compat: has_journal
+            s.putInt(96, 0x0002 or 0x0040)                       // incompat: filetype, extents
+            s.putInt(100, 0x0002 or 0x0008 or 0x0020)            // ro_compat: large_file, huge_file, dir_nlink
+        } else {
+            s.putInt(92, 0)                 // feature_compat
+            s.putInt(96, 0x0002)            // feature_incompat: filetype
+            s.putInt(100, 0)                // feature_ro_compat
+        }
         val uuid = java.util.UUID.randomUUID()
         s.position(104)
         s.order(ByteOrder.BIG_ENDIAN)
@@ -140,6 +168,13 @@ object Ext2Formatter {
         s.order(ByteOrder.LITTLE_ENDIAN)
         val label = volumeLabel.take(16).toByteArray(Charsets.US_ASCII)
         System.arraycopy(label, 0, sb, 120, label.size)
+        val journalExtent = if (journalBlocks > 0) extentRoot(journalStart, journalBlocks) else null
+        if (journalExtent != null) {
+            s.putInt(224, JOURNAL_INO)                  // s_journal_inum
+            sb[253] = 1                                 // s_jnl_backup_type: inode blocks
+            System.arraycopy(journalExtent, 0, sb, 268, 60)
+            s.putInt(268 + 64, journalBlocks * BLOCK_SIZE) // s_jnl_blocks[16]: i_size
+        }
 
         // ── Write every group's metadata ───────────────────────────────────
         for (g in 0 until groups) {
@@ -190,6 +225,14 @@ object Ext2Formatter {
                 intArrayOf(fileBlock), now
             )
         }
+        if (journalExtent != null) {
+            writeInode(table, JOURNAL_INO, S_IFREG or 0x180, journalBlocks.toLong() * BLOCK_SIZE, 1, IntArray(0), now)
+            val o = (JOURNAL_INO - 1) * INODE_SIZE
+            ByteBuffer.wrap(table).order(ByteOrder.LITTLE_ENDIAN).putInt(o + 28, journalBlocks * (BLOCK_SIZE / 512))
+                .putInt(o + 32, 0x80000) // EXT4_EXTENTS_FL
+            System.arraycopy(journalExtent, 0, table, o + 40, 60)
+            writeBlock(journalStart, journalSuperblock(journalBlocks, uuid))
+        }
         writeBlock(inodeTableStart, table)
 
         // ── Directory blocks ───────────────────────────────────────────────
@@ -222,6 +265,30 @@ object Ext2Formatter {
         if (fileBlock >= 0) writeBlock(fileBlock, rootFile!!.second.copyOf(BLOCK_SIZE))
 
         device.synchronizeCache()
+    }
+
+    private const val JOURNAL_INO = 8
+
+    /** i_block holding one extent: [count] blocks starting at [start]. */
+    private fun extentRoot(start: Int, count: Int): ByteArray {
+        val e = ByteArray(60)
+        ByteBuffer.wrap(e).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putShort(0xF30A.toShort()); putShort(1); putShort(4); putShort(0); putInt(0)
+            putInt(0); putShort(count.toShort()); putShort(0); putInt(start)
+        }
+        return e
+    }
+
+    /** An empty, clean JBD2 v2 journal superblock (s_start = 0: nothing to replay). */
+    private fun journalSuperblock(blocks: Int, uuid: java.util.UUID): ByteArray {
+        val j = ByteArray(BLOCK_SIZE)
+        ByteBuffer.wrap(j).order(ByteOrder.BIG_ENDIAN).apply {
+            putInt(0, 0xC03B3998.toInt()); putInt(4, 4); putInt(8, 0)
+            putInt(12, BLOCK_SIZE); putInt(16, blocks); putInt(20, 1); putInt(24, 1); putInt(28, 0)
+            putLong(48, uuid.mostSignificantBits); putLong(56, uuid.leastSignificantBits)
+            putInt(64, 1) // nr_users
+        }
+        return j
     }
 
     private fun usedInodes(rootFile: Pair<String, ByteArray>?): Int =
