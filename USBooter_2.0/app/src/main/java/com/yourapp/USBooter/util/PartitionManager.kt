@@ -180,7 +180,9 @@ object PartitionManager {
             val fs = boot?.let { filesystemOf(it) }
             val fsSectors = boot?.let { declaredSectors(it, fs, device.blockSize) } ?: 0L
             val nextStart = list.getOrNull(position + 1)?.start ?: limit
-            val ntfsMin = if (fs == "NTFS" && boot != null) NtfsResize.minimumSectors(device, e.start, boot) else null
+            val ntfsMin = if (fs == "NTFS" && boot != null) NtfsResize.minimumSectors(device, e.start, boot)
+                else if ((fs == "FAT32" || fs == "exFAT") && boot != null) FatShrink.minimumSectors(device, e.start, boot, fs)
+                else null
             val minSectors = when {
                 ntfsMin != null -> minOf(ntfsMin, e.sectors)
                 fs != null && fsSectors > 0 -> minOf(fsSectors, e.sectors)
@@ -201,12 +203,13 @@ object PartitionManager {
                     put("maxSizeSectors", maxSectors)
                     put("canDelete", true)
                     put("canResize", maxSectors > 0)
-                    put("resizesFilesystem", fs == "NTFS")
+                    put("resizesFilesystem", fs == "NTFS" || fs == "FAT32" || fs == "exFAT")
                     put(
                         "note",
                         when {
                             fs == null -> "The filesystem here is not recognised, so its size cannot be changed safely"
                             fs == "NTFS" -> "NTFS is resized together with the partition"
+                            fs == "FAT32" || fs == "exFAT" -> "When shrinking, files near the end are moved first so none are lost"
                             else -> "The partition can be resized; the $fs filesystem keeps its current size"
                         }
                     )
@@ -292,7 +295,19 @@ object PartitionManager {
                     "without cutting them off. Choose a larger size."
             )
         }
-        if (fs != "NTFS" && newSectors < fsSectors && !allowDataLoss) {
+        val fatMin = if ((fs == "FAT32" || fs == "exFAT") && boot != null) FatShrink.minimumSectors(device, target.start, boot, fs) else null
+        if (fatMin != null && newSectors < fsSectors && newSectors < fatMin && !allowDataLoss) {
+            return failure(
+                "Partition $index has files that need at least $fatMin sectors, so it cannot be shrunk to $newSectors sectors. " +
+                    "Choose a larger size."
+            )
+        }
+        var fatDone = false
+        if (fatMin != null && boot != null && newSectors < fsSectors && newSectors >= fatMin) {
+            FatShrink.resize(device, target.start, newSectors, boot, fs!!)?.let { return failure(it) }
+            fatDone = true
+        }
+        if (fs != "NTFS" && !fatDone && newSectors < fsSectors && !allowDataLoss) {
             return failure(
                 "Partition $index holds a ${fs ?: "unknown"} filesystem that needs $fsSectors sectors. Shrinking it to " +
                     "$newSectors sectors would cut off files at the end of the volume, so it was not done. " +
@@ -331,6 +346,8 @@ object PartitionManager {
                 }
             }
             notes += "The NTFS volume and its boot-sector copy were resized with the partition"
+        } else if (fatDone) {
+            notes += "Files past the new end were moved and the $fs filesystem was shrunk with the partition"
         } else if (fs != null) {
             notes += "The partition entry was resized; the $fs filesystem keeps its own size of $fsSectors sectors"
         } else {
