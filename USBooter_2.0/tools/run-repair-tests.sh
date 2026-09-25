@@ -25,11 +25,11 @@ fetch https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
 
 for f in BlockDevice BlockWriter NtfsFormatter Mbr Gpt Fat32Formatter Fat32Writer \
          ExfatFormatter ExfatWriter PartitionConfig LayoutMath FormatError \
-         MbrBootCode NtfsCapability NtfsTemplate NtfsResize; do
+         MbrBootCode NtfsCapability NtfsTemplate NtfsResize FatShrink; do
   cp "$MAIN/$f.kt" "$WORK/src/"
 done
 for f in DriveImages FakeBlockDevice NtfsRebuildTest PartitionRepairTest \
-         RepairTranslationCoverageTest PartitionManagerGptTest NtfsShrinkTest; do
+         RepairTranslationCoverageTest PartitionManagerGptTest NtfsShrinkTest FatShrinkTest; do
   cp "$TEST/$f.kt" "$WORK/src/"
 done
 
