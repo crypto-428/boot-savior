@@ -131,7 +131,12 @@ object Gpt {
         val buf = ByteBuffer.wrap(array).order(ByteOrder.LITTLE_ENDIAN)
 
         entries.forEach { entry ->
-            val typeGuid = if (entry.isESP) ESP_TYPE_GUID else BASIC_DATA_TYPE_GUID
+            val typeGuid = when {
+                entry.isESP -> ESP_TYPE_GUID
+                entry.filesystem == Filesystem.LINUX_SWAP -> UUID.fromString("0657FD6D-A4AB-43C4-84E5-0933C84B4F4F")
+                LinuxFs.isLinux(entry.filesystem) -> UUID.fromString("0FC63DAF-8483-4772-8E79-3D69D8477DE4")
+                else -> BASIC_DATA_TYPE_GUID
+            }
             putGuid(buf, typeGuid)
             putGuid(buf, UUID.randomUUID())
             buf.putLong(entry.startLba)

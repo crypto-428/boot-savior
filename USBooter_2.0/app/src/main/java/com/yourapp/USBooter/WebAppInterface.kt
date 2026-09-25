@@ -89,6 +89,9 @@ class WebAppInterface(private val activity: MainActivity) {
                     "NTFS" -> Filesystem.NTFS
                     "FAT16" -> Filesystem.FAT16
                     "FAT12" -> Filesystem.FAT12
+                    "EXT4" -> Filesystem.EXT4
+                    "EXT2" -> Filesystem.EXT2
+                    "SWAP", "LINUX_SWAP" -> Filesystem.LINUX_SWAP
                     else -> Filesystem.EXFAT // Fallback
                 }
                 partitions.add(
