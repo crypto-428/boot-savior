@@ -25,11 +25,11 @@ fetch https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
 
 for f in BlockDevice BlockWriter NtfsFormatter Mbr Gpt Fat32Formatter Fat32Writer \
          ExfatFormatter ExfatWriter PartitionConfig LayoutMath FormatError \
-         MbrBootCode NtfsCapability NtfsTemplate NtfsResize FatShrink; do
+         MbrBootCode NtfsCapability NtfsTemplate NtfsResize FatShrink FatLegacyFormatter LinuxFs Ext2Formatter; do
   cp "$MAIN/$f.kt" "$WORK/src/"
 done
 for f in DriveImages FakeBlockDevice NtfsRebuildTest PartitionRepairTest \
-         RepairTranslationCoverageTest PartitionManagerGptTest NtfsShrinkTest FatShrinkTest ExfatShrinkTest; do
+         RepairTranslationCoverageTest PartitionManagerGptTest NtfsShrinkTest FatShrinkTest ExfatShrinkTest LinuxFsTest; do
   cp "$TEST/$f.kt" "$WORK/src/"
 done
 
@@ -95,4 +95,5 @@ java -cp "$WORK/out:$RES:$JARS:$STDLIB" org.junit.runner.JUnitCore \
   com.yourapp.USBooter.util.PartitionManagerGptTest \
   com.yourapp.USBooter.util.NtfsShrinkTest \
   com.yourapp.USBooter.util.FatShrinkTest \
-  com.yourapp.USBooter.util.ExfatShrinkTest
+  com.yourapp.USBooter.util.ExfatShrinkTest \
+  com.yourapp.USBooter.util.LinuxFsTest
