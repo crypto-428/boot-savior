@@ -72,6 +72,8 @@ object PartitionRepair {
         val fs = when (filesystem.uppercase()) {
             "NTFS" -> Filesystem.NTFS
             "EXFAT" -> Filesystem.EXFAT
+            "FAT16" -> Filesystem.FAT16
+            "FAT12" -> Filesystem.FAT12
             else -> Filesystem.FAT32
         }
         progress(5, "Erasing the old partition table")
@@ -99,6 +101,7 @@ object PartitionRepair {
             Filesystem.FAT32 -> Fat32Formatter.format(usb, start, sectors, label)
             Filesystem.EXFAT -> ExfatFormatter.format(usb, start, sectors, label)
             Filesystem.NTFS -> NtfsFormatter.format(device, start, sectors, label)
+            Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(device, start, sectors, label, fs == Filesystem.FAT12)
         }
         progress(90, "Flushing the drive cache")
         runCatching { device.synchronizeCache() }

@@ -137,6 +137,10 @@ class FormatEngine(
                     Filesystem.NTFS -> NtfsFormatter.format(
                         device, part.startLba, part.sizeInSectors, partition.label
                     )
+                    Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(
+                        device, part.startLba, part.sizeInSectors, partition.label,
+                        partition.filesystem == Filesystem.FAT12
+                    )
                 }
 
                 if (cancelled) return cancelled("Cancelled", progressCallback)
@@ -625,6 +629,9 @@ class FormatEngine(
                 Filesystem.FAT32 -> Fat32Formatter.format(device, dataStart, dataSectors, dataLabel)
                 Filesystem.EXFAT -> ExfatFormatter.format(device, dataStart, dataSectors, dataLabel)
                 Filesystem.NTFS -> NtfsFormatter.format(device, dataStart, dataSectors, dataLabel)
+                Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(
+                    device, dataStart, dataSectors, dataLabel, dataFilesystem == Filesystem.FAT12
+                )
             }
         }
         if (cancelled) return cancelled("Cancelled", progressCallback)

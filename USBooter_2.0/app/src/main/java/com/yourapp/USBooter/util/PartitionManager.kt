@@ -394,11 +394,14 @@ object PartitionManager {
         val fs = when (filesystem.uppercase()) {
             "NTFS" -> Filesystem.NTFS
             "EXFAT" -> Filesystem.EXFAT
+            "FAT16" -> Filesystem.FAT16
+            "FAT12" -> Filesystem.FAT12
             else -> Filesystem.FAT32
         }
         val usb = device as? UsbBulkStorageDevice
         when (fs) {
             Filesystem.NTFS -> NtfsFormatter.format(device, startLba, sectors, label)
+            Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(device, startLba, sectors, label, fs == Filesystem.FAT12)
             Filesystem.FAT32 -> {
                 usb ?: return failure("This drive cannot be formatted as FAT32 right now")
                 Fat32Formatter.format(usb, startLba, sectors, label)
@@ -427,6 +430,8 @@ object PartitionManager {
             ByteArray(16).copyInto(s, o)
             s[o + 4] = when (fs) {
                 Filesystem.FAT32 -> 0x0C
+                Filesystem.FAT16 -> 0x0E
+                Filesystem.FAT12 -> 0x01
                 else -> 0x07
             }
             put32(s, o + 8, startLba)
@@ -479,7 +484,9 @@ object PartitionManager {
         if (oem == "NTFS    ") return "NTFS"
         if (!hasSignature(boot)) return null
         if (String(boot, 82, 8, Charsets.US_ASCII).trim().startsWith("FAT32")) return "FAT32"
-        if (String(boot, 54, 8, Charsets.US_ASCII).trim().startsWith("FAT")) return "FAT16"
+        val t = String(boot, 54, 8, Charsets.US_ASCII).trim()
+        if (t.startsWith("FAT12")) return "FAT12"
+        if (t.startsWith("FAT")) return "FAT16"
         return null
     }
 

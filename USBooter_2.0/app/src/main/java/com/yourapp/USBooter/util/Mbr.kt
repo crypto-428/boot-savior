@@ -96,6 +96,8 @@ object Mbr {
             Filesystem.FAT32 -> 0x0C.toByte() // FAT32, LBA
             Filesystem.EXFAT -> 0x07.toByte() // exFAT (shares the NTFS/exFAT type id)
             Filesystem.NTFS -> 0x07.toByte() // NTFS (shares the NTFS/exFAT type id)
+            Filesystem.FAT16 -> 0x0E.toByte() // FAT16, LBA
+            Filesystem.FAT12 -> 0x01.toByte() // FAT12
         }
     }
 }
