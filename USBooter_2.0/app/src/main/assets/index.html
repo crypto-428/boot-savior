@@ -1243,11 +1243,19 @@
 
         <div id="singleConfig">
           <div class="label" style="margin:14px 0 6px;" data-i18n="file_system">File System</div>
-          <div class="toggle-group" id="fsToggle">
-            <div class="toggle-opt active" onclick="switchFS(this, 'FAT32')">FAT32</div>
-            <div class="toggle-opt" onclick="switchFS(this, 'exFAT')">exFAT</div>
-            <div class="toggle-opt" onclick="switchFS(this, 'NTFS')">NTFS</div>
-          </div>
+          <select id="fsSelect" onchange="switchFS(this.value)" style="width:100%;">
+            <option value="FAT32" selected>FAT32</option>
+            <option value="exFAT">exFAT</option>
+            <option value="NTFS">NTFS</option>
+            <option value="FAT16">FAT16</option>
+            <option value="FAT12">FAT12</option>
+            <option value="EXT4">ext4 (Linux)</option>
+            <option value="EXT3">ext3 (Linux)</option>
+            <option value="EXT2">ext2 (Linux)</option>
+            <option value="SWAP">Linux swap</option>
+            <option value="HFSPLUS">HFS+ (Mac)</option>
+            <option value="APFS">APFS (Mac)</option>
+          </select>
         </div>
 
         <div id="dualConfig" style="display:none;">
@@ -1821,10 +1829,8 @@
     updatePartitionMap();
   }
 
-  function switchFS(el, fs) {
+  function switchFS(fs) {
     state.fileSystem = fs;
-    document.querySelectorAll('#fsToggle .toggle-opt').forEach(o => o.classList.remove('active'));
-    el.classList.add('active');
     updatePartitionMap();
   }
 
