@@ -17,7 +17,7 @@ object LinuxFs {
     val LINUX_DATA_GUID: ByteArray = guidBytes("0FC63DAF-8483-4772-8E79-3D69D8477DE4")
     val LINUX_SWAP_GUID: ByteArray = guidBytes("0657FD6D-A4AB-43C4-84E5-0933C84B4F4F")
 
-    fun isLinux(fs: Filesystem) = fs == Filesystem.EXT4 || fs == Filesystem.EXT2 || fs == Filesystem.LINUX_SWAP
+    fun isLinux(fs: Filesystem) = fs == Filesystem.EXT4 || fs == Filesystem.EXT3 || fs == Filesystem.EXT2 || fs == Filesystem.LINUX_SWAP
 
     fun mbrType(fs: Filesystem): Int = if (fs == Filesystem.LINUX_SWAP) MBR_SWAP else MBR_LINUX
 
@@ -27,6 +27,7 @@ object LinuxFs {
         val clean = label.ifBlank { if (fs == Filesystem.LINUX_SWAP) "swap" else "LINUX" }
         when (fs) {
             Filesystem.EXT4 -> Ext2Formatter.format(device, start, sectors, clean, ext4 = true)
+            Filesystem.EXT3 -> Ext2Formatter.format(device, start, sectors, clean, ext3 = true)
             Filesystem.EXT2 -> Ext2Formatter.format(device, start, sectors, clean)
             Filesystem.LINUX_SWAP -> formatSwap(device, start, sectors, clean)
             else -> throw IllegalArgumentException("${fs.displayName} is not a Linux filesystem")

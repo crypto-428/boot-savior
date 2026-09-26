@@ -447,6 +447,7 @@ object PartitionManager {
             "FAT16" -> Filesystem.FAT16
             "FAT12" -> Filesystem.FAT12
             "EXT4" -> Filesystem.EXT4
+            "EXT3" -> Filesystem.EXT3
             "EXT2" -> Filesystem.EXT2
             "SWAP", "LINUX_SWAP" -> Filesystem.LINUX_SWAP
             "HFS+", "HFSPLUS", "HFS" -> Filesystem.HFSPLUS
@@ -457,7 +458,7 @@ object PartitionManager {
         when (fs) {
             Filesystem.NTFS -> NtfsFormatter.format(device, startLba, sectors, label)
             Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(device, startLba, sectors, label, fs == Filesystem.FAT12)
-            Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, startLba, sectors, label, fs)
+            Filesystem.EXT4, Filesystem.EXT3, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, startLba, sectors, label, fs)
             Filesystem.HFSPLUS -> HfsPlusFormatter.format(device, startLba, sectors, label)
             Filesystem.APFS -> ApfsTemplate.format(device, startLba, sectors, label)
             Filesystem.FAT32 -> {
@@ -490,7 +491,7 @@ object PartitionManager {
                 Filesystem.FAT32 -> 0x0C
                 Filesystem.FAT16 -> 0x0E
                 Filesystem.FAT12 -> 0x01
-                Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.mbrType(fs).toByte()
+                Filesystem.EXT4, Filesystem.EXT3, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.mbrType(fs).toByte()
                 Filesystem.HFSPLUS, Filesystem.APFS -> 0xAF.toByte()
                 else -> 0x07
             }

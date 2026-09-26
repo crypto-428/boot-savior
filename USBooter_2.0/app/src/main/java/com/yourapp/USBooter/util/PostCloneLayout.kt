@@ -370,7 +370,7 @@ object PostCloneLayout {
             Filesystem.EXFAT -> ExfatFormatter.format(device, start, sectors, "DATA")
             Filesystem.NTFS -> NtfsFormatter.format(device, start, sectors, "DATA")
             Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(device, start, sectors, "DATA", fs == Filesystem.FAT12)
-            Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, start, sectors, "DATA", fs)
+            Filesystem.EXT4, Filesystem.EXT3, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, start, sectors, "DATA", fs)
             Filesystem.HFSPLUS -> HfsPlusFormatter.format(device, start, sectors, "DATA")
             Filesystem.APFS -> ApfsTemplate.format(device, start, sectors, "DATA")
         }
