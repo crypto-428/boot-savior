@@ -144,6 +144,9 @@ class FormatEngine(
                     Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(
                         device, part.startLba, part.sizeInSectors, partition.label, partition.filesystem
                     )
+                    Filesystem.HFSPLUS -> HfsPlusFormatter.format(
+                        device, part.startLba, part.sizeInSectors, partition.label
+                    )
                 }
 
                 if (cancelled) return cancelled("Cancelled", progressCallback)
@@ -636,6 +639,7 @@ class FormatEngine(
                     device, dataStart, dataSectors, dataLabel, dataFilesystem == Filesystem.FAT12
                 )
                 Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, dataStart, dataSectors, dataLabel, dataFilesystem)
+                Filesystem.HFSPLUS -> HfsPlusFormatter.format(device, dataStart, dataSectors, dataLabel)
             }
         }
         if (cancelled) return cancelled("Cancelled", progressCallback)

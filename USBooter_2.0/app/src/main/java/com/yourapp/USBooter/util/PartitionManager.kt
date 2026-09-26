@@ -177,7 +177,7 @@ object PartitionManager {
         val array = JSONArray()
         list.forEachIndexed { position, e ->
             val boot = runCatching { device.readBlocks(e.start, 1) }.getOrNull()
-            val linux = if (boot?.let { filesystemOf(it) } == null) LinuxFs.detect(device, e.start) else null
+            val linux = if (boot?.let { filesystemOf(it) } == null) (LinuxFs.detect(device, e.start) ?: HfsPlusFormatter.detect(device, e.start)) else null
             val fs = linux ?: boot?.let { filesystemOf(it) }
             val fsSectors = if (linux != null) (if (linux == "swap") e.sectors else LinuxFs.declaredSectors(device, e.start))
                 else boot?.let { declaredSectors(it, fs, device.blockSize) } ?: 0L
@@ -449,6 +449,7 @@ object PartitionManager {
             "EXT4" -> Filesystem.EXT4
             "EXT2" -> Filesystem.EXT2
             "SWAP", "LINUX_SWAP" -> Filesystem.LINUX_SWAP
+            "HFS+", "HFSPLUS", "HFS" -> Filesystem.HFSPLUS
             else -> Filesystem.FAT32
         }
         val usb = device as? UsbBulkStorageDevice
@@ -456,6 +457,7 @@ object PartitionManager {
             Filesystem.NTFS -> NtfsFormatter.format(device, startLba, sectors, label)
             Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(device, startLba, sectors, label, fs == Filesystem.FAT12)
             Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, startLba, sectors, label, fs)
+            Filesystem.HFSPLUS -> HfsPlusFormatter.format(device, startLba, sectors, label)
             Filesystem.FAT32 -> {
                 usb ?: return failure("This drive cannot be formatted as FAT32 right now")
                 Fat32Formatter.format(usb, startLba, sectors, label)
@@ -468,7 +470,7 @@ object PartitionManager {
         if (g != null) {
             val o = slot * g.entrySize
             ByteArray(g.entrySize).copyInto(g.entries, o)
-            (if (LinuxFs.isLinux(fs)) LinuxFs.gptType(fs) else BASIC_DATA_GUID).copyInto(g.entries, o)
+            (if (fs == Filesystem.HFSPLUS) HfsPlusFormatter.HFS_GUID else if (LinuxFs.isLinux(fs)) LinuxFs.gptType(fs) else BASIC_DATA_GUID).copyInto(g.entries, o)
             val u = java.util.UUID.randomUUID()
             put64(g.entries, o + 16, u.mostSignificantBits)
             put64(g.entries, o + 24, u.leastSignificantBits)
@@ -487,6 +489,7 @@ object PartitionManager {
                 Filesystem.FAT16 -> 0x0E
                 Filesystem.FAT12 -> 0x01
                 Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.mbrType(fs).toByte()
+                Filesystem.HFSPLUS -> 0xAF.toByte()
                 else -> 0x07
             }
             put32(s, o + 8, startLba)
