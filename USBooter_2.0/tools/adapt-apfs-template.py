@@ -27,10 +27,34 @@ def adapt(tpl,N,label,out):
     cib=blk(cibaddr); xid=struct.unpack_from('<Q',cib,16)[0]
     bm=struct.unpack_from('<Q',cib,64)[0]
     old0=struct.unpack_from('<I',cib,56)[0]; free0=struct.unpack_from('<I',cib,60)[0]
-    bitmap=blk(bm); extra=[]; b=used
-    while len(extra)<cibs-1:
-        if not (bitmap[b//8]>>(b%8))&1: extra.append(b); bitmap[b//8]|=1<<(b%8)
-        b+=1
+    ipOld=struct.unpack_from('<Q',sm,176)[0]; ipOldCnt=struct.unpack_from('<Q',sm,152)[0]
+    ipCnt=3*(chunks+cibs); extra=[]
+    if ipCnt>ipOldCnt:
+        ipNew=used; assert ipNew+ipCnt<min(N,BPC)
+        d=ipNew-ipOld
+        for r in range(ipOldCnt):
+            src=bytes(blk(ipOld+r)); x=blk(ipNew+r); x[:]=src; blk(ipOld+r)[:]=bytes(BS)
+            if struct.unpack_from('<Q',x,8)[0]==ipOld+r:
+                struct.pack_into('<Q',x,8,ipNew+r); x[0:8]=fl(x)
+        cibaddr+=d; bm+=d; cib=blk(cibaddr)
+        # IP free queue records carry IP addresses
+        for i in range(used):
+            if typ(i)==2 and struct.unpack_from('<Q',c,i*BS+8)[0]==struct.unpack_from('<Q',sm,208)[0]:
+                x=blk(i); toff,tlen=struct.unpack_from('<HH',x,40); n=struct.unpack_from('<I',x,36)[0]
+                ks=56+toff+tlen
+                for j in range(n):
+                    k=struct.unpack_from('<H',x,56+toff+4*j)[0]; pa=struct.unpack_from('<Q',x,ks+k+8)[0]
+                    if ipOld<=pa<ipOld+ipOldCnt: struct.pack_into('<Q',x,ks+k+8,pa+d)
+                x[0:8]=fl(x)
+        bitmap=blk(bm)
+        for b in range(ipOld,ipOld+ipOldCnt): bitmap[b//8]&=~(1<<(b%8))&0xFF
+        for b in range(ipNew,ipNew+ipCnt): bitmap[b//8]|=1<<(b%8)
+        free0+=ipOldCnt-ipCnt
+        ipbm=blk(struct.unpack_from('<Q',sm,168)[0]+struct.unpack_from('<H',sm,struct.unpack_from('<I',sm,328)[0])[0])
+        for r in range(ipOldCnt,ipOldCnt+cibs-1):
+            extra.append(ipNew+r); ipbm[r//8]|=1<<(r%8)
+        ipBase=ipNew
+    else: ipBase=ipOld; ipCnt=ipOldCnt
     c0=min(N,BPC); free0=free0+(c0-old0)-len(extra); totalfree=free0+(N-c0)
     cl=[cibaddr]+extra
     for k,a in enumerate(cl):
@@ -51,7 +75,7 @@ def adapt(tpl,N,label,out):
             struct.pack_into('<Q',x,1312,((mfl(N) if N*BS<(128<<20) else 8)<<32)|e)
         elif t==5:
             struct.pack_into('<QQIIQ',x,48,N,chunks,cibs,0,totalfree)
-            struct.pack_into('<I',x,128,2568+8*cibs)
+            struct.pack_into('<I',x,128,2568+8*cibs); struct.pack_into('<Q',x,152,ipCnt); struct.pack_into('<Q',x,176,ipBase)
             struct.pack_into('<H',x,224,ipl(chunks)); struct.pack_into('<H',x,264,mfl(N))
             for k,a in enumerate(cl): struct.pack_into('<Q',x,2568+8*k,a)
         elif t==0x0d:
