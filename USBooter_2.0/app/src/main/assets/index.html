@@ -961,7 +961,7 @@
   /* ── Toast ── */
   .toast{
     position:fixed;
-    bottom:30px;
+    bottom:calc(90px + env(safe-area-inset-bottom));
     left:50%;
     transform:translateX(-50%);
     background:var(--toast-bg);
@@ -1266,7 +1266,7 @@
             <select id="p2fs" onchange="updatePartitionMap()">
               <option value="FAT32">FAT32</option>
               <option value="exFAT" selected>exFAT</option>
-              <option value="NTFS">NTFS</option><option value="FAT16">FAT16</option><option value="FAT12">FAT12</option><option value="EXT4">ext4 (Linux)</option><option value="EXT2">ext2 (Linux)</option><option value="SWAP">Linux swap</option>
+              <option value="NTFS">NTFS</option><option value="FAT16">FAT16</option><option value="FAT12">FAT12</option><option value="EXT4">ext4 (Linux)</option><option value="EXT2">ext2 (Linux)</option><option value="SWAP">Linux swap</option><option value="HFSPLUS">HFS+ (Mac)</option>
             </select>
             <input type="text" id="p2size" value="Remaining" disabled data-i18n-value="remaining_word">
           </div>
@@ -1279,7 +1279,7 @@
             <select id="newPartitionFS" onchange="updatePartitionMap()">
               <option value="FAT32">FAT32</option>
               <option value="exFAT">exFAT</option>
-              <option value="NTFS">NTFS</option><option value="FAT16">FAT16</option><option value="FAT12">FAT12</option><option value="EXT4">ext4 (Linux)</option><option value="EXT2">ext2 (Linux)</option><option value="SWAP">Linux swap</option>
+              <option value="NTFS">NTFS</option><option value="FAT16">FAT16</option><option value="FAT12">FAT12</option><option value="EXT4">ext4 (Linux)</option><option value="EXT2">ext2 (Linux)</option><option value="SWAP">Linux swap</option><option value="HFSPLUS">HFS+ (Mac)</option>
             </select>
             <input type="number" id="newPartitionSize" placeholder="Size" data-i18n-ph="size" min="1" onchange="updatePartitionMap()">
             <select id="newPartitionUnit" onchange="updatePartitionMap()" style="min-width:60px;">
@@ -1728,7 +1728,7 @@
       card.style.animationDelay = (i * 0.12) + 's';
       card.onclick = () => selectDriveUI(card, d);
       card.innerHTML = `
-        <span class="usb-icon" style="animation-delay:${0.15 + i * 0.12}s">🔌</span>
+        <span class="usb-icon" style="animation-delay:${0.15 + i * 0.12}s"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M15,7v4h1v2h-3V5h2l-3,-4 -3,4h2v8H8v-2.28c0.6,-0.35 1,-0.98 1,-1.72 0,-1.1 -0.9,-2 -2,-2s-2,0.9 -2,2c0,0.74 0.4,1.38 1,1.72V14c0,1.11 0.89,2 2,2h3v2.28c-0.6,0.35 -1,0.98 -1,1.72 0,1.1 0.9,2 2,2s2,-0.9 2,-2c0,-0.74 -0.4,-1.38 -1,-1.72V16h3c1.11,0 2,-0.89 2,-2v-2h1V7h-4z"/></svg></span>
         <div class="name">${d.name}</div>
         <div class="meta">${d.deviceName}</div>
         <div class="details">
@@ -2508,7 +2508,7 @@
         '<div style="font-size:12px;opacity:.8;margin-bottom:4px;">' + t('repair_wipe_fs') + '</div>' +
         '<select id="repairWipeFs" style="width:100%;padding:8px;">' +
           '<option value="EXFAT">exFAT</option><option value="FAT32">FAT32</option>' +
-          '<option value="NTFS">NTFS</option><option value="FAT16">FAT16</option><option value="FAT12">FAT12</option><option value="EXT4">ext4 (Linux)</option><option value="EXT2">ext2 (Linux)</option><option value="SWAP">Linux swap</option></select>' +
+          '<option value="NTFS">NTFS</option><option value="FAT16">FAT16</option><option value="FAT12">FAT12</option><option value="EXT4">ext4 (Linux)</option><option value="EXT2">ext2 (Linux)</option><option value="SWAP">Linux swap</option><option value="HFSPLUS">HFS+ (Mac)</option></select>' +
         '<input id="repairWipeConfirm" placeholder="' + t('type_wipe') + '" ' +
           'style="width:100%;margin-top:8px;padding:8px;">' +
       '</div>'
@@ -2723,7 +2723,7 @@
           '" style="width:100%;padding:8px;">' +
         '<select id="peNewFs" style="width:100%;margin-top:8px;padding:8px;">' +
           '<option value="EXFAT">exFAT</option><option value="FAT32">FAT32</option>' +
-          '<option value="NTFS">NTFS</option><option value="FAT16">FAT16</option><option value="FAT12">FAT12</option><option value="EXT4">ext4 (Linux)</option><option value="EXT2">ext2 (Linux)</option><option value="SWAP">Linux swap</option></select>' +
+          '<option value="NTFS">NTFS</option><option value="FAT16">FAT16</option><option value="FAT12">FAT12</option><option value="EXT4">ext4 (Linux)</option><option value="EXT2">ext2 (Linux)</option><option value="SWAP">Linux swap</option><option value="HFSPLUS">HFS+ (Mac)</option></select>' +
         '<input id="peNewLabel" value="USBOOTER" maxlength="11" style="width:100%;margin-top:8px;padding:8px;">' +
       '</div>');
     document.getElementById('modalBtnRow').innerHTML =

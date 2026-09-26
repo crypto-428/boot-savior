@@ -99,6 +99,7 @@ object Mbr {
             Filesystem.FAT16 -> 0x0E.toByte() // FAT16, LBA
             Filesystem.FAT12 -> 0x01.toByte() // FAT12
             Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.mbrType(entry.filesystem).toByte()
+            Filesystem.HFSPLUS -> 0xAF.toByte() // Apple HFS/HFS+
         }
     }
 }
