@@ -78,6 +78,7 @@ object PartitionRepair {
             "EXT2" -> Filesystem.EXT2
             "SWAP", "LINUX_SWAP" -> Filesystem.LINUX_SWAP
             "HFS+", "HFSPLUS", "HFS" -> Filesystem.HFSPLUS
+            "APFS" -> Filesystem.APFS
             else -> Filesystem.FAT32
         }
         progress(5, "Erasing the old partition table")
@@ -108,6 +109,7 @@ object PartitionRepair {
             Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(device, start, sectors, label, fs == Filesystem.FAT12)
             Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, start, sectors, label, fs)
             Filesystem.HFSPLUS -> HfsPlusFormatter.format(device, start, sectors, label)
+            Filesystem.APFS -> ApfsTemplate.format(device, start, sectors, label)
         }
         progress(90, "Flushing the drive cache")
         runCatching { device.synchronizeCache() }

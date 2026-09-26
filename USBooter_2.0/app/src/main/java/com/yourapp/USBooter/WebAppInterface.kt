@@ -93,6 +93,7 @@ class WebAppInterface(private val activity: MainActivity) {
                     "EXT2" -> Filesystem.EXT2
                     "SWAP", "LINUX_SWAP" -> Filesystem.LINUX_SWAP
                     "HFS+", "HFSPLUS", "HFS" -> Filesystem.HFSPLUS
+                    "APFS" -> Filesystem.APFS
                     else -> Filesystem.EXFAT // Fallback
                 }
                 partitions.add(

@@ -17,7 +17,8 @@ enum class Filesystem(val displayName: String) : Serializable {
     EXT4("ext4"),
     EXT2("ext2"),
     LINUX_SWAP("Linux swap"),
-    HFSPLUS("HFS+ (Mac)")
+    HFSPLUS("HFS+ (Mac)"),
+    APFS("APFS (Mac)")
 }
 
 enum class PartitionTableType(val displayName: String) : Serializable {

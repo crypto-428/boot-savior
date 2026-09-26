@@ -18,6 +18,7 @@ def mfl(n):
 def adapt(tpl,N,label,out):
     c=bytearray(tpl)
     used=max(i for i in range(len(c)//BS) if any(c[i*BS:(i+1)*BS]))+1
+    c+=bytes(max(0,min(N,BPC)*BS-len(c)))
     assert N>=max(used+8,512)
     blk=lambda i:memoryview(c)[i*BS:(i+1)*BS]
     typ=lambda i:struct.unpack_from('<I',c,i*BS+24)[0]&0xFFFF
@@ -55,7 +56,8 @@ def adapt(tpl,N,label,out):
             extra.append(ipNew+r); ipbm[r//8]|=1<<(r%8)
         ipBase=ipNew
     else: ipBase=ipOld; ipCnt=ipOldCnt
-    c0=min(N,BPC); free0=free0+(c0-old0)-len(extra); totalfree=free0+(N-c0)
+    c0=min(N,BPC); bmb=blk(bm)
+    free0=c0-sum(bin(bmb[i]).count('1') for i in range(BS)); totalfree=free0+(N-c0)
     cl=[cibaddr]+extra
     for k,a in enumerate(cl):
         x=blk(a)
@@ -82,6 +84,6 @@ def adapt(tpl,N,label,out):
             x[240:256]=vu; nm=label.encode()[:255]; x[704:960]=nm+bytes(256-len(nm))
         else: continue
         x[0:8]=fl(x)
-    with open(out,'wb') as f: f.write(c[:used*BS]); f.truncate(N*BS)
+    with open(out,'wb') as f: f.write(c[:max(used, ipBase+ipCnt)*BS]); f.truncate(N*BS)
 if __name__=='__main__':
     adapt(open(sys.argv[1],'rb').read()[:300*BS],int(sys.argv[2]),sys.argv[3],sys.argv[4])
