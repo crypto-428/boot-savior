@@ -133,6 +133,7 @@ object Gpt {
         entries.forEach { entry ->
             val typeGuid = when {
                 entry.isESP -> ESP_TYPE_GUID
+                entry.filesystem == Filesystem.APFS -> UUID.fromString("7C3457EF-0000-11AA-AA11-00306543ECAC")
                 entry.filesystem == Filesystem.HFSPLUS -> UUID.fromString("48465300-0000-11AA-AA11-00306543ECAC")
                 entry.filesystem == Filesystem.LINUX_SWAP -> UUID.fromString("0657FD6D-A4AB-43C4-84E5-0933C84B4F4F")
                 LinuxFs.isLinux(entry.filesystem) -> UUID.fromString("0FC63DAF-8483-4772-8E79-3D69D8477DE4")
