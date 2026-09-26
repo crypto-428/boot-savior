@@ -25,11 +25,11 @@ fetch https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
 
 for f in BlockDevice BlockWriter NtfsFormatter Mbr Gpt Fat32Formatter Fat32Writer \
          ExfatFormatter ExfatWriter PartitionConfig LayoutMath FormatError \
-         MbrBootCode NtfsCapability NtfsTemplate NtfsResize FatShrink FatLegacyFormatter LinuxFs Ext2Formatter HfsPlusFormatter AppleFs; do
+         MbrBootCode NtfsCapability NtfsTemplate NtfsResize FatShrink FatLegacyFormatter LinuxFs Ext2Formatter HfsPlusFormatter AppleFs ApfsTemplate; do
   cp "$MAIN/$f.kt" "$WORK/src/"
 done
 for f in DriveImages FakeBlockDevice NtfsRebuildTest PartitionRepairTest \
-         RepairTranslationCoverageTest PartitionManagerGptTest NtfsShrinkTest FatShrinkTest ExfatShrinkTest LinuxFsTest FatLegacyTest; do
+         RepairTranslationCoverageTest PartitionManagerGptTest NtfsShrinkTest FatShrinkTest ExfatShrinkTest LinuxFsTest FatLegacyTest AppleFsTest; do
   cp "$TEST/$f.kt" "$WORK/src/"
 done
 
@@ -97,4 +97,10 @@ java -cp "$WORK/out:$RES:$JARS:$STDLIB" org.junit.runner.JUnitCore \
   com.yourapp.USBooter.util.FatShrinkTest \
   com.yourapp.USBooter.util.ExfatShrinkTest \
   com.yourapp.USBooter.util.FatLegacyTest \
-  com.yourapp.USBooter.util.LinuxFsTest
+  com.yourapp.USBooter.util.LinuxFsTest \
+  com.yourapp.USBooter.util.AppleFsTest
+
+# Real Apple-filesystem checkers on the images AppleFsTest saved.
+if command -v fsck.apfs >/dev/null; then
+  for f in /tmp/applefs-apfs-*.img; do fsck.apfs "$f" && echo "apfsck OK: $f"; done
+fi
