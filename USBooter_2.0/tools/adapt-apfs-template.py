@@ -56,7 +56,8 @@ def adapt(tpl,N,label,out):
             extra.append(ipNew+r); ipbm[r//8]|=1<<(r%8)
         ipBase=ipNew
     else: ipBase=ipOld; ipCnt=ipOldCnt
-    c0=min(N,BPC); free0=free0+(c0-old0)-len(extra); totalfree=free0+(N-c0)
+    c0=min(N,BPC); bmb=blk(bm)
+    free0=c0-sum(bin(bmb[i]).count('1') for i in range(BS)); totalfree=free0+(N-c0)
     cl=[cibaddr]+extra
     for k,a in enumerate(cl):
         x=blk(a)
