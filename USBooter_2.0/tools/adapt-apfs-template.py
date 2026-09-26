@@ -18,6 +18,7 @@ def mfl(n):
 def adapt(tpl,N,label,out):
     c=bytearray(tpl)
     used=max(i for i in range(len(c)//BS) if any(c[i*BS:(i+1)*BS]))+1
+    c+=bytes(max(0,min(N,BPC)*BS-len(c)))
     assert N>=max(used+8,512)
     blk=lambda i:memoryview(c)[i*BS:(i+1)*BS]
     typ=lambda i:struct.unpack_from('<I',c,i*BS+24)[0]&0xFFFF
