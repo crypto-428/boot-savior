@@ -9,6 +9,12 @@ def fl(b):
         s1=(s1+w)%M; s2=(s2+s1)%M
     c1=M-((s1+s2)%M); c2=M-((s1+c1)%M)
     return struct.pack('<II',c1,c2)
+def ipl(ch):
+    r=(3*(ch+751)//1127-1)&0xFFFF
+    return 3 if r==2 else r
+def mfl(n):
+    r=1+(n-1)//4544 if n<0x40000 else (116+(n-261281)//2272 if n<0x100000 else 512)
+    return 3 if r==2 else r
 def adapt(tpl,N,label,out):
     c=bytearray(tpl)
     used=max(i for i in range(len(c)//BS) if any(c[i*BS:(i+1)*BS]))+1
@@ -42,10 +48,11 @@ def adapt(tpl,N,label,out):
         if t==1:
             struct.pack_into('<Q',x,40,N); x[72:88]=cu; struct.pack_into('<I',x,180,maxfs)
             e=struct.unpack_from('<Q',x,1312)[0]&0xFFFFFFFF
-            struct.pack_into('<Q',x,1312,(((N+4095)//4096)<<32)|e)
+            struct.pack_into('<Q',x,1312,((mfl(N) if N*BS<(128<<20) else 8)<<32)|e)
         elif t==5:
             struct.pack_into('<QQIIQ',x,48,N,chunks,cibs,0,totalfree)
             struct.pack_into('<I',x,128,2568+8*cibs)
+            struct.pack_into('<H',x,224,ipl(chunks)); struct.pack_into('<H',x,264,mfl(N))
             for k,a in enumerate(cl): struct.pack_into('<Q',x,2568+8*k,a)
         elif t==0x0d:
             x[240:256]=vu; nm=label.encode()[:255]; x[704:960]=nm+bytes(256-len(nm))
