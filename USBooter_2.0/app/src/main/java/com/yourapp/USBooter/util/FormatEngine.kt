@@ -141,7 +141,7 @@ class FormatEngine(
                         device, part.startLba, part.sizeInSectors, partition.label,
                         partition.filesystem == Filesystem.FAT12
                     )
-                    Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(
+                    Filesystem.EXT4, Filesystem.EXT3, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(
                         device, part.startLba, part.sizeInSectors, partition.label, partition.filesystem
                     )
                     Filesystem.HFSPLUS -> HfsPlusFormatter.format(
@@ -641,7 +641,7 @@ class FormatEngine(
                 Filesystem.FAT16, Filesystem.FAT12 -> FatLegacyFormatter.format(
                     device, dataStart, dataSectors, dataLabel, dataFilesystem == Filesystem.FAT12
                 )
-                Filesystem.EXT4, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, dataStart, dataSectors, dataLabel, dataFilesystem)
+                Filesystem.EXT4, Filesystem.EXT3, Filesystem.EXT2, Filesystem.LINUX_SWAP -> LinuxFs.format(device, dataStart, dataSectors, dataLabel, dataFilesystem)
                 Filesystem.HFSPLUS -> HfsPlusFormatter.format(device, dataStart, dataSectors, dataLabel)
                 Filesystem.APFS -> ApfsTemplate.format(device, dataStart, dataSectors, dataLabel)
             }

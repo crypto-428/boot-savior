@@ -90,6 +90,7 @@ class WebAppInterface(private val activity: MainActivity) {
                     "FAT16" -> Filesystem.FAT16
                     "FAT12" -> Filesystem.FAT12
                     "EXT4" -> Filesystem.EXT4
+                    "EXT3" -> Filesystem.EXT3
                     "EXT2" -> Filesystem.EXT2
                     "SWAP", "LINUX_SWAP" -> Filesystem.LINUX_SWAP
                     "HFS+", "HFSPLUS", "HFS" -> Filesystem.HFSPLUS

@@ -15,6 +15,7 @@ enum class Filesystem(val displayName: String) : Serializable {
     FAT16("FAT16"),
     FAT12("FAT12"),
     EXT4("ext4"),
+    EXT3("ext3"),
     EXT2("ext2"),
     LINUX_SWAP("Linux swap"),
     HFSPLUS("HFS+ (Mac)"),

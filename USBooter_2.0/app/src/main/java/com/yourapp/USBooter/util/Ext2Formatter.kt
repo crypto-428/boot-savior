@@ -47,8 +47,11 @@ object Ext2Formatter {
         volumeLabel: String,
         rootFile: Pair<String, ByteArray>? = null,
         /** ext4: extents + journal + ext4-only feature flags, so Linux and blkid see a real ext4 volume. */
-        ext4: Boolean = false
+        ext4: Boolean = false,
+        /** ext3: ext2 + a block-mapped journal (no extents). */
+        ext3: Boolean = false
     ) {
+        val lf = rootFile != null // lost+found only for persistence volumes; user drives stay empty
         val sectorSize = device.blockSize
         require(BLOCK_SIZE % sectorSize == 0) { "ext2 needs a sector size that divides 4096" }
         val sectorsPerBlock = BLOCK_SIZE / sectorSize
@@ -75,11 +78,13 @@ object Ext2Formatter {
         // ── Group 0 data blocks: root dir, lost+found dir, optional file ──
         val group0FirstFree = metaPerGroup
         val rootDirBlock = group0FirstFree
-        val lostFoundBlock = group0FirstFree + 1
+        val lostFoundBlock = if (lf) group0FirstFree + 1 else -1
         val fileBlock = if (rootFile != null && rootFile.second.isNotEmpty()) group0FirstFree + 2 else -1
-        val baseDataUsed = if (fileBlock >= 0) 3 else 2
+        val baseDataUsed = if (fileBlock >= 0) 3 else if (lf) 2 else 1
         val group0Size = minOf(BLOCKS_PER_GROUP, fsBlocks)
-        val journalBlocks = if (!ext4) 0 else {
+        val journalBlocks = if (ext3) {
+            if (group0Size - metaPerGroup - baseDataUsed - 16 >= 1025) 1024 else 0
+        } else if (!ext4) 0 else {
             val wanted = when {
                 fsBlocks < 32_768 -> 1024
                 fsBlocks < 262_144 -> 4096
@@ -90,7 +95,7 @@ object Ext2Formatter {
             if (room >= wanted) wanted else if (room >= 1024) 1024 else 0
         }
         val journalStart = metaPerGroup + baseDataUsed
-        val group0DataUsed = baseDataUsed + journalBlocks
+        val group0DataUsed = baseDataUsed + journalBlocks + if (ext3 && journalBlocks > 0) 1 else 0
 
         fun writeBlock(index: Int, data: ByteArray) {
             val padded = if (data.size == BLOCK_SIZE) data else data.copyOf(BLOCK_SIZE)
@@ -115,7 +120,7 @@ object Ext2Formatter {
             gdtBuf.putInt(groupStart + 3 + gdtBlocks)          // inode table
             gdtBuf.putShort(free.toShort())                    // free blocks
             gdtBuf.putShort((if (g == 0) INODES_PER_GROUP - usedInodes(rootFile) else INODES_PER_GROUP).toShort())
-            gdtBuf.putShort((if (g == 0) 2 else 0).toShort())  // used dirs
+            gdtBuf.putShort((if (g == 0) (if (lf) 2 else 1) else 0).toShort())  // used dirs
         }
 
         val totalInodes = INODES_PER_GROUP * groups
@@ -156,6 +161,10 @@ object Ext2Formatter {
             s.putInt(92, if (journalBlocks > 0) 0x0004 else 0)   // compat: has_journal
             s.putInt(96, 0x0002 or 0x0040)                       // incompat: filetype, extents
             s.putInt(100, 0x0002 or 0x0008 or 0x0020)            // ro_compat: large_file, huge_file, dir_nlink
+        } else if (ext3) {
+            s.putInt(92, if (journalBlocks > 0) 0x0004 else 0)   // has_journal
+            s.putInt(96, 0x0002)                                 // filetype
+            s.putInt(100, 0x0002)                                // large_file
         } else {
             s.putInt(92, 0)                 // feature_compat
             s.putInt(96, 0x0002)            // feature_incompat: filetype
@@ -168,7 +177,7 @@ object Ext2Formatter {
         s.order(ByteOrder.LITTLE_ENDIAN)
         val label = volumeLabel.take(16).toByteArray(Charsets.US_ASCII)
         System.arraycopy(label, 0, sb, 120, label.size)
-        val journalExtent = if (journalBlocks > 0) extentRoot(journalStart, journalBlocks) else null
+        val journalExtent = if (journalBlocks > 0) (if (ext3) blockMapRoot(journalStart, journalStart + journalBlocks) else extentRoot(journalStart, journalBlocks)) else null
         if (journalExtent != null) {
             s.putInt(224, JOURNAL_INO)                  // s_journal_inum
             sb[253] = 1                                 // s_jnl_backup_type: inode blocks
@@ -217,8 +226,8 @@ object Ext2Formatter {
         // ── Inodes in group 0 ──────────────────────────────────────────────
         val inodeTableStart = 3 + gdtBlocks
         val table = ByteArray(BLOCK_SIZE) // holds inodes 1..32 (128 bytes each)
-        writeInode(table, ROOT_INO, S_IFDIR or 0x1ED, BLOCK_SIZE.toLong(), 3, intArrayOf(rootDirBlock), now)
-        writeInode(table, LOST_FOUND_INO, S_IFDIR or 0x1C0, BLOCK_SIZE.toLong(), 2, intArrayOf(lostFoundBlock), now)
+        writeInode(table, ROOT_INO, S_IFDIR or 0x1ED, BLOCK_SIZE.toLong(), if (lf) 3 else 2, intArrayOf(rootDirBlock), now)
+        if (lf) writeInode(table, LOST_FOUND_INO, S_IFDIR or 0x1C0, BLOCK_SIZE.toLong(), 2, intArrayOf(lostFoundBlock), now)
         if (fileBlock >= 0) {
             writeInode(
                 table, FILE_INO, S_IFREG or 0x1A4, rootFile!!.second.size.toLong(), 1,
@@ -228,7 +237,13 @@ object Ext2Formatter {
         if (journalExtent != null) {
             writeInode(table, JOURNAL_INO, S_IFREG or 0x180, journalBlocks.toLong() * BLOCK_SIZE, 1, IntArray(0), now)
             val o = (JOURNAL_INO - 1) * INODE_SIZE
-            ByteBuffer.wrap(table).order(ByteOrder.LITTLE_ENDIAN).putInt(o + 28, journalBlocks * (BLOCK_SIZE / 512))
+            if (ext3) {
+                ByteBuffer.wrap(table).order(ByteOrder.LITTLE_ENDIAN).putInt(o + 28, (journalBlocks + 1) * (BLOCK_SIZE / 512))
+                val ind = ByteArray(BLOCK_SIZE)
+                val ib = ByteBuffer.wrap(ind).order(ByteOrder.LITTLE_ENDIAN)
+                for (i in 12 until journalBlocks) ib.putInt((i - 12) * 4, journalStart + i)
+                writeBlock(journalStart + journalBlocks, ind)
+            } else ByteBuffer.wrap(table).order(ByteOrder.LITTLE_ENDIAN).putInt(o + 28, journalBlocks * (BLOCK_SIZE / 512))
                 .putInt(o + 32, 0x80000) // EXT4_EXTENTS_FL
             System.arraycopy(journalExtent, 0, table, o + 40, 60)
             writeBlock(journalStart, journalSuperblock(journalBlocks, uuid))
@@ -245,15 +260,18 @@ object Ext2Formatter {
             pos += putDirEntry(root, pos, LOST_FOUND_INO, "lost+found", 2)
             lastRootEntryPos = pos
             putDirEntry(root, pos, FILE_INO, rootFile!!.first, 1)
-        } else {
+        } else if (lf) {
             lastRootEntryPos = pos
             putDirEntry(root, pos, LOST_FOUND_INO, "lost+found", 2)
+        } else {
+            lastRootEntryPos = 12 // ".." stretches to the end: empty root
         }
         // the final entry stretches to the end of the block, as ext2 requires
         ByteBuffer.wrap(root).order(ByteOrder.LITTLE_ENDIAN)
             .putShort(lastRootEntryPos + 4, (BLOCK_SIZE - lastRootEntryPos).toShort())
         writeBlock(rootDirBlock, root)
 
+        if (lf) {
         val lost = ByteArray(BLOCK_SIZE)
         var lpos = 0
         lpos += putDirEntry(lost, lpos, LOST_FOUND_INO, ".", 2)
@@ -261,6 +279,7 @@ object Ext2Formatter {
         ByteBuffer.wrap(lost).order(ByteOrder.LITTLE_ENDIAN)
             .putShort(lpos + 4, (BLOCK_SIZE - lpos).toShort())
         writeBlock(lostFoundBlock, lost)
+        }
 
         if (fileBlock >= 0) writeBlock(fileBlock, rootFile!!.second.copyOf(BLOCK_SIZE))
 
@@ -292,7 +311,16 @@ object Ext2Formatter {
     }
 
     private fun usedInodes(rootFile: Pair<String, ByteArray>?): Int =
-        if (rootFile != null && rootFile.second.isNotEmpty()) FILE_INO else LOST_FOUND_INO
+        if (rootFile == null) FIRST_INO - 1 else if (rootFile.second.isNotEmpty()) FILE_INO else LOST_FOUND_INO
+
+    /** i_block for a block-mapped file: 12 direct pointers + the single indirect block at [indirect]. */
+    private fun blockMapRoot(start: Int, indirect: Int): ByteArray {
+        val e = ByteArray(60)
+        val b = ByteBuffer.wrap(e).order(ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until 12) b.putInt(i * 4, start + i)
+        b.putInt(48, indirect)
+        return e
+    }
 
     private fun setBit(bitmap: ByteArray, index: Int) {
         if (index / 8 >= bitmap.size) return
