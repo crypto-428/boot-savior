@@ -104,3 +104,4 @@ java -cp "$WORK/out:$RES:$JARS:$STDLIB" org.junit.runner.JUnitCore \
 if command -v fsck.apfs >/dev/null; then
   for f in /tmp/applefs-apfs-*.img; do fsck.apfs "$f" && echo "apfsck OK: $f"; done
 fi
+if command -v fsck.hfsplus >/dev/null; then fsck.hfsplus -f -n /tmp/applefs-hfs.img && echo "fsck.hfsplus OK"; fi

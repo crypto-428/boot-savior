@@ -133,10 +133,10 @@ object HfsPlusFormatter {
             clump = p.catBlocks * BLOCK_SIZE, keyCompare = 0xCF, attributes = 0x6,
             depth = 1, root = 1, leafRecords = 2, firstLeaf = 1, lastLeaf = 1)
         val catLeaf = catalogLeaf(name)
-        val catFirst = ByteArray(BLOCK_SIZE)
-        catHeader.copyInto(catFirst, 0)
-        catLeaf.copyInto(catFirst, CAT_NODE)
-        writeBlock(p.catStart, catFirst)
+        val catNodes2 = ByteArray(CAT_NODE * 2)
+        catHeader.copyInto(catNodes2, 0)
+        catLeaf.copyInto(catNodes2, CAT_NODE)
+        writeBlock(p.catStart, catNodes2)
 
         // ── volume header + alternate copy ──────────────────────────────────
         val now = System.currentTimeMillis() / 1000 + HFS_EPOCH_DELTA
