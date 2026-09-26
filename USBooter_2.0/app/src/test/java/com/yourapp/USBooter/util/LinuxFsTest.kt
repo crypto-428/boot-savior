@@ -10,6 +10,7 @@ class LinuxFsTest {
         out.close()
     }
     @Test fun ext4() { val d = FakeBlockDevice(131072); LinuxFs.format(d, 0, 131072, "EXT4_TEST", Filesystem.EXT4); assertEquals("ext4", LinuxFs.detect(d, 0)); dump(d, "ext4") }
+    @Test fun ext3() { val d = FakeBlockDevice(131072); LinuxFs.format(d, 0, 131072, "EXT3", Filesystem.EXT3); assertEquals("ext3", LinuxFs.detect(d, 0)); dump(d, "ext3") }
     @Test fun ext2() { val d = FakeBlockDevice(131072); LinuxFs.format(d, 0, 131072, "EXT2", Filesystem.EXT2); assertEquals("ext2", LinuxFs.detect(d, 0)); dump(d, "ext2") }
     @Test fun swap() { val d = FakeBlockDevice(65536); LinuxFs.format(d, 0, 65536, "", Filesystem.LINUX_SWAP); assertEquals("swap", LinuxFs.detect(d, 0)) }
 }
