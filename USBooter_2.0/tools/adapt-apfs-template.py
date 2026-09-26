@@ -83,6 +83,6 @@ def adapt(tpl,N,label,out):
             x[240:256]=vu; nm=label.encode()[:255]; x[704:960]=nm+bytes(256-len(nm))
         else: continue
         x[0:8]=fl(x)
-    with open(out,'wb') as f: f.write(c[:used*BS]); f.truncate(N*BS)
+    with open(out,'wb') as f: f.write(c[:max(used, ipBase+ipCnt)*BS]); f.truncate(N*BS)
 if __name__=='__main__':
     adapt(open(sys.argv[1],'rb').read()[:300*BS],int(sys.argv[2]),sys.argv[3],sys.argv[4])
